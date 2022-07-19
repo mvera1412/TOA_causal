@@ -15,6 +15,7 @@ epochs = 50
 lr = 1e-4
 wd= 1e-6
 agreement_threshold = 0.3
+model_name = 'trainTOA_bs4'
    
     
 if __name__ == '__main__':
@@ -26,13 +27,13 @@ if __name__ == '__main__':
 	print(f"Device to be used: {device}")
 
 ##Train dataset	
-	if not(os.path.exists('train_TOA')):
+	if not(os.path.exists('data/'+model_name)):
 		url = 'https://drive.google.com/file/d/1mAhSP4sqcmtJlwKUDtFxcb4Aqi_W0Shs'
-		output = 'data/train_TOA'
+		output = 'data/'+model_name
 		gdown.download(url, output, quiet=False)
-	with open("data/train_TOA", "rb") as fp:   # Unpickling
+	with open('data/'+model_name, "rb") as fp:   # Unpickling
 		train_loaders = pickle.load(fp)
-	#os.remove("data/train_TOA") 
+	#os.remove('data/'+model_name) 
 
 ##Model and optimizer
 	model = MBPFDUNet().to(device=device)

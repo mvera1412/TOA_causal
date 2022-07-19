@@ -8,11 +8,6 @@ from TOA.train import createForwMat
 import ANDMask.and_mask_utils as and_mask_utils
 from ANDMask.common import permutation_groups
 
-def _prepare_batch(batch, device, non_blocking):
-    x, y = batch
-    return (ignite.utils.convert_tensor(x, device=device, non_blocking=non_blocking),
-            ignite.utils.convert_tensor(y, device=device, non_blocking=non_blocking))
-
 def applyInvMat(x, Ao, dimS, dimI): # [Ao] = (16384,4096)
     x = torch.squeeze(x,1) # (-1,32,512)
     x = torch.reshape(x,(dimS[0],int(dimS[2]*dimS[3]))) # (-1,16384)
@@ -39,7 +34,7 @@ def predicting(net, input, Ao, device):
     g1 = applyForwMat(f0,Ao,dimS,dimI) # (-1,1,32,512)
     Dg = g1 - x # (-1,1,128,512)
     Df = applyInvMat(Dg,Ao,dimS,dimI) # (-1,1,64,64)
-    pred = net(f0,Df)
+    pred = net.to(device=device)(f0,Df)
     return torch.squeeze(pred,1)
 
 def train(model, device, train_loaders, optimizer, epoch,
