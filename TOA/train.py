@@ -7,20 +7,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import shutil
 import os
-from data.model_based_matrix import build_matrix, SensorMaskCartCircleArc
+from TOA.model_based_matrix import build_matrix, SensorMaskCartCircleArc
 
 import torch
 import torch.nn as nn
-#from torch.utils.data.dataloader import DataLoader, Dataset
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data import Dataset
 from torch.utils.data import random_split
 from torch.optim import Adam
 
-from mbfdunetln.model.mbfdunetln import MBPFDUNet
-#from mbfdunetln.model.alosses import CharbonnierLoss
+from TOA.mbfdunetln import MBPFDUNet
 
-#import wandb
 
 # ---------------------------------------------------------------------------
 def save_ckp(state, is_best, checkpoint_path, best_model_path):
@@ -59,41 +56,47 @@ def load_ckp(checkpoint_fpath, model, optimizer):
 
     
 # ---------------------------------------------------------------------------
-def casting(X):
-	return torch.as_tensor(X).type(torch.float32) 
-# ---------------------------------------------------------------------------
-
 def gettraindata(cache_dir):
     
     print('Obtaining data for training...')
+    
+    #cache_dir = '../data/cache'
 
-    n_envs = 5
     X0 = np.load(os.path.join(cache_dir, 'X0.npy')) # Noisy sinogram
     X1 = np.load(os.path.join(cache_dir, 'X1.npy')) 
     X2 = np.load(os.path.join(cache_dir, 'X2.npy'))
     X3 = np.load(os.path.join(cache_dir, 'X3.npy'))
     X4 = np.load(os.path.join(cache_dir, 'X4.npy'))
-    X = [casting(X0),casting(X1),casting(X2),casting(X3),casting(X4)]
+    X = np.append(X0,X1,axis=0); X = np.append(X,X2,axis=0); X = np.append(X,X3,axis=0); X = np.append(X,X4,axis=0)
     del X0,X1,X2,X3,X4
     Y0 = np.load(os.path.join(cache_dir, 'Y0.npy')) # True image
     Y1 = np.load(os.path.join(cache_dir, 'Y1.npy')) 
     Y2 = np.load(os.path.join(cache_dir, 'Y2.npy'))
     Y3 = np.load(os.path.join(cache_dir, 'Y3.npy'))
     Y4 = np.load(os.path.join(cache_dir, 'Y4.npy'))
-    Y = [casting(Y0),casting(Y1),casting(Y2),casting(Y3),casting(Y4)]
+    Y = np.append(Y0,Y1,axis=0); Y = np.append(Y,Y2,axis=0); Y = np.append(Y,Y3,axis=0); Y = np.append(Y,Y4,axis=0)
     del Y0,Y1,Y2,Y3,Y4
-
+    #Z0 = np.load(os.path.join(cache_dir, 'Z0.npy')) # True sinogram
+    #Z1 = np.load(os.path.join(cache_dir, 'Z1.npy'))
+    #Z2 = np.load(os.path.join(cache_dir, 'Z2.npy'))
+    #Z3 = np.load(os.path.join(cache_dir, 'Z3.npy'))
+    #Z4 = np.load(os.path.join(cache_dir, 'Z4.npy'))
+    #Z = np.append(Z0,Z1,axis=0); Z = np.append(Z,Z2,axis=0); Z = np.append(Z,Z3,axis=0); Z = np.append(Z,Z4,axis=0);
+    #del Z0,Z1,Z2,Z3,Z4
     
     # Shuffle data
-    for env in range(n_envs): 
-    	indpat = np.arange(0, X[env].shape[0], dtype=int)  # indice patrón
-    	ida = np.random.permutation(indpat)
-    	X[env] = X[env][ida,:,:]
-    	Y[env] = Y[env][ida,:,:]
+    indpat = np.arange(0, X.shape[0], dtype=int)  # indice patrón
+    ida = np.random.permutation(indpat)
+    X = X[ida,:,:]
+    Y = Y[ida,:,:]
+    #Z = Z[ida,:,:]
         
+    X=X.astype(np.float32)
+    Y=Y.astype(np.float32)
+    #Z=Z.astype(np.float32)
     print('done')
     
-    return X,Y
+    return X,Y #,Z
 
 # ---------------------------------------------------------------------------
 class OAImageDataset(Dataset):
@@ -119,7 +122,8 @@ def get_trainloader(X, Y, val_percent, batch_size):
     train_set, val_set = random_split(dataset_train, [n_train, n_val], generator=torch.Generator().manual_seed(0))
     
     # Create data loaders
-    loader_args = dict(batch_size=batch_size, num_workers=2, pin_memory=True) 
+    #loader_args = dict(batch_size=batch_size, num_workers=8, pin_memory=True) # for local uncomment this
+    loader_args = dict(batch_size=batch_size, num_workers=2, pin_memory=True) # for google_colab uncomment this
     train_loader = DataLoader(train_set, shuffle=True,  drop_last=True, **loader_args)
     val_loader = DataLoader(val_set, shuffle=False, drop_last=True, **loader_args) #drop_last=True, drop the last batch if the dataset size is not divisible by the batch size.
     
@@ -215,20 +219,12 @@ def train_mbfdunetln(batch_size,epochs,continuetrain,plotresults,WandB,fecha):
     
     # Get data
     X,Y = gettraindata(cache_dir)
-    n_envs = len(X)
     
-    # 4. Create data loader (batch_size is per environment)
+    # 4. Create data loader
     val_percent = 0.2
-    train_loader = []
-    val_loader = []
-    n_train = []
-    n_val = []
-    for env in range(n_envs):
-	a,b,c,d = get_trainloader(X, Y, val_percent, batch_size)
-	train_loader.append(a)
-	val_loader.append(b)
-	n_train.append(c)
-	n_val.append(d)
+    X = torch.as_tensor(X).type(torch.float32) 
+    Y = torch.as_tensor(Y).type(torch.float32)
+    train_loader, val_loader, n_train, n_val = get_trainloader(X, Y, val_percent, batch_size)
     
     # 5. Initialize logging and initialize weights or continue a previous training 
     logfilename='TrainingLog_MBFDUNetLN.log'
@@ -339,6 +335,7 @@ def train_mbfdunetln(batch_size,epochs,continuetrain,plotresults,WandB,fecha):
                 #
                 yv = yv.to(device=device) # (-1,1,64,64)
                 # compute the model output
+                #pred = net(xv.unsqueeze(1).type(torch.float32))
                 predv = net(f0v,Dfv)
                 predv = predv.squeeze(1)
                 # calculate loss
