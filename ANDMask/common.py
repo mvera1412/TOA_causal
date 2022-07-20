@@ -4,7 +4,7 @@ def permutation_groups(xs, group_size):
     """
     Yields group_size-sized batches of xs indefinitely, by cycling through
     all objects before repeating one"""
-    n = len(xs)
+    n = len(xs) # n always holds with group_size in my code
     while 1:
         random_permutation = np.random.permutation(n)
         for idxs in random_permutation.reshape((-1, group_size)):
