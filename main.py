@@ -70,10 +70,10 @@ if __name__ == '__main__':
 				data_test = next(iterator)
 			except StopIteration:
 				break  
-			a,b,c,d=computing_metrics(data_test[0].to("cpu"),data_test[1].to("cpu"),Ao.to(device="cpu"))
+			a,b,c,d=computing_metrics(data_test[0].to("cpu"),data_test[1].to("cpu"),Ao.to(device="cpu"),model)
 			SSIM[j].append(a)
 			PC[j].append(b)
 			RMSE[j].append(c)
 			PSNR[j].append(d) 
 
-	testing(np.array(SSIM),np.array(PC),np.array(RMSE),np.array(PSNR),loader = test_loaders, Ao = Ao.to(device="cpu"),model) 
+	testing(np.array(SSIM),np.array(PC),np.array(RMSE),np.array(PSNR),loader = test_loaders, Ao = Ao.to(device="cpu"),model = model) 
