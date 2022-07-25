@@ -28,7 +28,7 @@ if __name__ == '__main__':
 	print(f"Device to be used: {device}")
 
 ##Load train dataset	
-	train_loaders, val_loader = load_traindataset(cache_dir,val_percent,batchsize,val_batchsize=40,le)
+	train_loaders, val_loader = load_traindataset(cache_dir,val_percent,batchsize,val_batchsize=40,le = le)
 
 ##Model and optimizer
 	model = MBPFDUNet().to(device=device)
