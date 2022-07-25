@@ -176,17 +176,21 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, valid_loss_min
         loss = loss_fn(predv, datas[1].to(device))
         val_loss += loss.item()
     val_loss = val_loss / len(val_loader)      
+    if val_loss < valid_loss_min:
+        valid_loss_min = val_loss
+
     checkpoint = {
             'epoch': epoch,
-            'valid_loss_min': val_loss,
+            'valid_loss_min': valid_loss_min,
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
-        }
+                }
     save_ckp(checkpoint, False, ckp_last, ckp_best)
+
     if val_loss < valid_loss_min:
-      save_ckp(checkpoint, True, ckp_last, ckp_best)
-      valid_loss_min = val_loss
-    return valid_loss_min
+        save_ckp(checkpoint, True, ckp_last, ckp_best)
+      
+    return valid_loss_min 
 
 def computing_metrics(X,Y,Ao,model):
   bs = X.shape[0]
