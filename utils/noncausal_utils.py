@@ -41,9 +41,9 @@ def train_nc(model,device,train_loader,optimizer,Ao,loss_fn,scheduler):
             break
         optimizer.zero_grad()       
         predt = predicting(model, datas[0].to(device), Ao, device)
-	mean_loss = loss_fn(predt, datas[1].to(device))
+        mean_loss = loss_fn(predt, datas[1].to(device))
         mean_loss.backward()
-	optimizer.step()
+        optimizer.step()
 
         losses.append(mean_loss.item())
         example_count += output.shape[0]

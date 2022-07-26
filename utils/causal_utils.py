@@ -189,7 +189,7 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, valid_loss_min
     save_ckp(checkpoint, False, ckp_last, ckp_best)
     if val_loss < valid_loss_min:
         valid_loss_min = val_loss
-         save_ckp(checkpoint, True, ckp_last, ckp_best)
+        save_ckp(checkpoint, True, ckp_last, ckp_best)
     return valid_loss_min 
 
 def computing_metrics(X,Y,Ao,model,model_nc):
