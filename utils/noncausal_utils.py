@@ -46,7 +46,7 @@ def train_nc(model,device,train_loader,optimizer,Ao,loss_fn,scheduler):
         optimizer.step()
 
         losses.append(mean_loss.item())
-        example_count += output.shape[0]
+        example_count += predt.shape[0]
         batch_idx += 1
     scheduler.step()    
 
