@@ -251,11 +251,11 @@ def testing(SSIM,PC,RMSE,PSNR,loader,Ao,model,model_nc):
     print('\n')
     print('############################################################### \n')
     colormap=plt.cm.gist_heat
-    plt.figure();
-    plt.suptitle('Environment'+str(j),y=0.5)
+    plt.figure(figsize=(19.2, 14.4))
+    plt.suptitle('Environment'+str(j),y=0.65)
     plt.grid(False)
-    plt.subplot(1,5,1);plt.xlabel('x (mm)'); plt.ylabel('y (mm)'); plt.title('True image',fontsize=8);
-    #plt.subplots_adjust(wspace=0.6)
+    plt.subplot(1,5,1); plt.title('True image',fontsize=12);
+    plt.subplots_adjust(wspace=0.5)
     dataset = next(iter(loader[j]))
     rnd_idx = np.random.randint(len(dataset[0]))
     sinogram = dataset[0][rnd_idx]
@@ -273,11 +273,11 @@ def testing(SSIM,PC,RMSE,PSNR,loader,Ao,model,model_nc):
     predimage_nc = predicting(model_nc,sinogram.view(1,sinogram.shape[0],sinogram.shape[1]), Ao, "cpu").detach().numpy()
     
     plt.imshow(trueimage, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);
-    plt.subplot(1,5,2);plt.xlabel('x (mm)'); plt.title('DAS reconstruction',fontsize=8);
+    plt.subplot(1,5,2);plt.title('DAS reconstruction',fontsize=12);
     plt.imshow(Pdas, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);  
-    plt.subplot(1,5,3);plt.xlabel('x (mm)');  plt.title('LBP reconstruction',fontsize=8);
+    plt.subplot(1,5,3);plt.title('LBP reconstruction',fontsize=12);
     plt.imshow(Plbp, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);
-    plt.subplot(1,5,4);plt.xlabel('x (mm)'); plt.title('Benchmark recosntruction',fontsize=8);
+    plt.subplot(1,5,4);plt.title('Benchmark recosntruction',fontsize=12);
     plt.imshow(predimage_nc[0,:,:], aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);  
-    plt.subplot(1,5,5);plt.xlabel('x (mm)'); plt.title('ANDMask recosntruction',fontsize=8);
+    plt.subplot(1,5,5);plt.title('ANDMask recosntruction',fontsize=12);
     plt.imshow(predimage[0,:,:], aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);    
