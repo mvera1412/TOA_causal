@@ -4,9 +4,9 @@ from tqdm import tqdm
 
 from TOA.mbfdunetln import MBPFDUNet
 from ANDMask.adam_flexible_weight_decay import AdamFlexibleWeightDecay
-from torch.optim.lr_scheduler import MultiStepLR
 from TOA.train import createForwMat
 from utils.causal_utils import train,validation,testing,load_traindataset,load_testdataset,load_ckp
+from utils.noncausal_utils import load_traindataset_nc,train_nc
 
 batchsize = 3 #per environment
 val_percent = 440.0/2216.0 # 440 para validacion, 1776 para train
@@ -33,7 +33,7 @@ if __name__ == '__main__':
 ##Model and optimizer
 	model = MBPFDUNet().to(device=device)
 	optimizer = AdamFlexibleWeightDecay(model.parameters(),lr=lr,weight_decay_order='before',weight_decay=wd)
-	lr_scheduler = MultiStepLR(optimizer,milestones=[le * epochs * 3 // 4],gamma=0.1)
+	lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,milestones=[le * epochs * 3 // 4],gamma=0.1)
 	loss_fn = torch.nn.MSELoss()
 
 ##TOA matrix
@@ -42,19 +42,36 @@ if __name__ == '__main__':
 	Ao = Ao.to(device=device)
 
 ##Training
-	ckp_last='mbfdunetln' + fecha + '.pth' # name of the file of the saved weights of the trained net
-	ckp_best='mbfdunetln_best' + fecha + '.pth'
+	ckp_last = cache_dir + 'mbfdunetln' + fecha + '.pth' # COMPARAR CON LA VERSION DE TUPAC
+	ckp_best = cache_dir + 'mbfdunetln_best' + fecha + '.pth'
 	if continue_training:
 		model, optimizer, epoch0, valid_loss_min = load_ckp(ckp_last, model, optimizer)
 	else:
 		epoch0 = 0
-		valid_loss_min = 1000 # Numero de fantasía para que pierda
+		valid_loss_min = np.inf
 
 	for epoch in tqdm(range(epoch0 + 1, epochs + 1)):
 		train(model,device,train_loaders,optimizer,n_agreement_envs=le,Ao=Ao,loss_fn=loss_fn,agreement_threshold=agreement_threshold,scheduler=lr_scheduler)
 		valid_loss_min = validation(model,device, val_loader, optimizer, loss_fn, Ao, valid_loss_min, epoch, ckp_last, ckp_best)
 
 	model, optimizer, best_epoch, valid_loss_min = load_ckp(ckp_best, model, optimizer)
+
+##Training benchmark model
+	ckp_benchmark_last = cache_dir + 'benchmark.pth'
+	ckp_benchmark_best = cache_dir + 'benchmark_best.pth'
+	model_nc = MBPFDUNet().to(device=device)
+	optimizer_nc = torch.optim.Adam(model_nc.parameters(),lr=lr,weight_decay=wd)
+	if continue_training:
+		model_nc, optimizer_nc, epoch0, vlm_nc = load_ckp(ckp_benchmark_last, model_nc, optimizer_nc)
+	else:
+		epoch0 = 0
+		vlm_nc = np.inf
+	train_loader_nc, val_loader_nc = load_traindataset_nc(cache_dir,val_percent,batchsize*le,val_batchsize=40,le = le)
+	for epoch in tqdm(range(epoch0 + 1, epochs + 1)):
+		train_nc(model_nc,device,train_loader_nc,optimizer_nc,Ao=Ao,loss_fn=loss_fn,scheduler=lr_scheduler)
+		vlm_nc = validation(model_nc, device, val_loader_nc, optimizer_nc, loss_fn, Ao, vlm_nc, epoch, ckp_benchmark_last, ckp_benchmark_best)
+
+	model_nc, optimizer_nc, best_epoch_nc, vlm_nc = load_ckp(ckp_benchmark_best, model_nc, optimizer_nc)
 
 ##Testing
 	test_loaders = load_testdataset(cache_dir)
@@ -70,10 +87,10 @@ if __name__ == '__main__':
 				data_test = next(iterator)
 			except StopIteration:
 				break  
-			a,b,c,d=computing_metrics(data_test[0].to("cpu"),data_test[1].to("cpu"),Ao.to(device="cpu"),model)
+			a,b,c,d=computing_metrics(data_test[0].to("cpu"),data_test[1].to("cpu"),Ao.to(device="cpu"),model,model_nc)
 			SSIM[j].append(a)
 			PC[j].append(b)
 			RMSE[j].append(c)
 			PSNR[j].append(d) 
 
-	testing(np.array(SSIM),np.array(PC),np.array(RMSE),np.array(PSNR),loader = test_loaders, Ao = Ao.to(device="cpu"),model = model) 
+	testing(np.array(SSIM),np.array(PC),np.array(RMSE),np.array(PSNR),test_loaders, Ao.to(device="cpu"),model, model_nc) 
