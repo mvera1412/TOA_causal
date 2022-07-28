@@ -2,7 +2,7 @@ import torch
 #import ignite
 import numpy as np
 import os
-import shutil
+#import shutil
 
 #from TOA.mbfdunetln import MBPFDUNet
 #from ANDMask.adam_flexible_weight_decay import AdamFlexibleWeightDecay
@@ -82,19 +82,6 @@ def predicting(net, input, Ao, device):
     Df = applyInvMat(Dg,Ao,dimS,dimI) # (-1,1,64,64)
     pred = net.to(device=device)(f0,Df)
     return torch.squeeze(pred,1)
-
-def save_ckp(state, is_best, checkpoint_path, best_model_path):
-    """
-    state: checkpoint we want to save
-    is_best: is this the best checkpoint; min validation loss
-    checkpoint_path: path to save checkpoint
-    best_model_path: path to save best model
-    """
-    f_path = checkpoint_path
-    torch.save(state, f_path)
-    if is_best:
-        best_fpath = best_model_path
-        shutil.copyfile(f_path, best_fpath)
 
 def load_ckp(checkpoint_fpath, model, optimizer):
     """
@@ -186,10 +173,10 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, valid_loss_min
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
                 }
-    save_ckp(checkpoint, False, ckp_last, ckp_best)
+    torch.save(checkpoint, ckp_last)
     if val_loss < valid_loss_min:
         valid_loss_min = val_loss
-        save_ckp(checkpoint, True, ckp_last, ckp_best)
+        torch.save(checkpoint, ckp_best)
     return valid_loss_min 
 
 def computing_metrics(X,Y,Ao,model,model_nc):
