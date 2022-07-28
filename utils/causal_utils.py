@@ -93,7 +93,9 @@ def load_ckp(checkpoint_fpath, model, optimizer):
     model.load_state_dict(checkpoint['state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     loss = checkpoint['valid_loss_min'] 
-    return model, optimizer, checkpoint['epoch'], loss
+    return model, optimizer, checkpoint['epoch'], loss, checkpoint['learning_rate'], checkpoint['weight_cost'], checkpoint['batchsize'], checkpoint['agreement_threshold']
+
+
 
 def train(model, device, train_loaders, optimizer,
           n_agreement_envs,
@@ -151,7 +153,8 @@ def train(model, device, train_loaders, optimizer,
     scheduler.step()
 
     
-def validation(model, device, val_loader, optimizer, loss_fn, Ao, valid_loss_min, epoch, ckp_last, ckp_best):
+def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ckp_last, ckp_best):    
+    valid_loss_min = checkpoint['valid_loss_min']
     val_loss = 0.0
     bs = val_loader.batch_size
     n_val = bs * len(val_loader)
@@ -168,11 +171,16 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, valid_loss_min
     val_loss = val_loss / n_val     
 
     checkpoint = {
-            'epoch': epoch,
+            'epoch': checkpoint['epoch'],
             'valid_loss_min': np.min((valid_loss_min,val_loss)),
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
+            'learning_rate': checkpoint['learning_rate'], 
+            'weight_cost': checkpoint['weight_cost'],
+            'batchsize': checkpoint['batchsize'],
+            'agreement_threshold': checkpoint['agreement_threshold']
                 }
+    open('log.txt','a').write(str(checkpoint['epoch'])+'\t'+str(checkpoint['learning_rate'])+'\t'+str(checkpoint['weight_cost'])+'\t'+str(checkpoint['batchsize'])+'\t'+str(checkpoint['agreement_threshold'])+'\t'+str(val_loss)+'\n')
     torch.save(checkpoint, ckp_last)
     if val_loss < valid_loss_min:
         valid_loss_min = val_loss
@@ -180,91 +188,91 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, valid_loss_min
     return valid_loss_min 
 
 def computing_metrics(X,Y,Ao,model,model_nc):
-  bs = X.shape[0]
-  pred = predicting(model,X, Ao.to(device="cpu"), "cpu")
-  pred_nc = predicting(model_nc,X, Ao.to(device="cpu"), "cpu")
-  SSIM=np.zeros((bs,4))
-  PC=np.zeros((bs,4))
-  RMSE=np.zeros((bs,4))
-  PSNR=np.zeros((bs,4))
-  for i1 in range(bs):
-    trueimage=Y[i1,:,:].detach().numpy()
-    predimage=pred[i1,:,:].detach().numpy()
-    predimage=predimage/np.max(np.abs(predimage))
-    SSIM[i1,0]=structural_similarity(trueimage,predimage) 
-    PC[i1,0]=stats.pearsonr(trueimage.ravel(),predimage.ravel())[0]  
-    RMSE[i1,0]=math.sqrt(mean_squared_error(trueimage,predimage))
-    PSNR[i1,0]=peak_signal_noise_ratio(trueimage,predimage)
+    bs = X.shape[0]
+    pred = predicting(model,X, Ao.to(device="cpu"), "cpu")
+    pred_nc = predicting(model_nc,X, Ao.to(device="cpu"), "cpu")
+    SSIM=np.zeros((bs,4))
+    PC=np.zeros((bs,4))
+    RMSE=np.zeros((bs,4))
+    PSNR=np.zeros((bs,4))
+    for i1 in range(bs):
+        trueimage=Y[i1,:,:].detach().numpy()
+        predimage=pred[i1,:,:].detach().numpy()
+        predimage=predimage/np.max(np.abs(predimage))
+        SSIM[i1,0]=structural_similarity(trueimage,predimage) 
+        PC[i1,0]=stats.pearsonr(trueimage.ravel(),predimage.ravel())[0]  
+        RMSE[i1,0]=math.sqrt(mean_squared_error(trueimage,predimage))
+        PSNR[i1,0]=peak_signal_noise_ratio(trueimage,predimage)
     
-    predimage=pred_nc[i1,:,:].detach().numpy()
-    predimage=predimage/np.max(np.abs(predimage))
-    SSIM[i1,1]=structural_similarity(trueimage,predimage) 
-    PC[i1,1]=stats.pearsonr(trueimage.ravel(),predimage.ravel())[0]  
-    RMSE[i1,1]=math.sqrt(mean_squared_error(trueimage,predimage))
-    PSNR[i1,1]=peak_signal_noise_ratio(trueimage,predimage)
+        predimage=pred_nc[i1,:,:].detach().numpy()
+        predimage=predimage/np.max(np.abs(predimage))
+        SSIM[i1,1]=structural_similarity(trueimage,predimage) 
+        PC[i1,1]=stats.pearsonr(trueimage.ravel(),predimage.ravel())[0]  
+        RMSE[i1,1]=math.sqrt(mean_squared_error(trueimage,predimage))
+        PSNR[i1,1]=peak_signal_noise_ratio(trueimage,predimage)
     
-    Plbp = Ao.T@X[i1,:,:].ravel()
-    Plbp = Plbp.detach().numpy()
-    Plbp=Plbp/np.max(np.abs(Plbp))
-    Plbp=np.reshape(Plbp,(64,64))
-    Plbp=Plbp.astype(np.float32)
-    SSIM[i1,2]=structural_similarity(trueimage,Plbp) 
-    PC[i1,2]=stats.pearsonr(trueimage.ravel(),Plbp.ravel())[0]  
-    RMSE[i1,2]=math.sqrt(mean_squared_error(trueimage,Plbp))
-    PSNR[i1,2]=peak_signal_noise_ratio(trueimage,Plbp)
+        Plbp = Ao.T@X[i1,:,:].ravel()
+        Plbp = Plbp.detach().numpy()
+        Plbp=Plbp/np.max(np.abs(Plbp))
+        Plbp=np.reshape(Plbp,(64,64))
+        Plbp=Plbp.astype(np.float32)
+        SSIM[i1,2]=structural_similarity(trueimage,Plbp) 
+        PC[i1,2]=stats.pearsonr(trueimage.ravel(),Plbp.ravel())[0]  
+        RMSE[i1,2]=math.sqrt(mean_squared_error(trueimage,Plbp))
+        PSNR[i1,2]=peak_signal_noise_ratio(trueimage,Plbp)
     
-    Pdas = applyDAS(X[i1,:,:])
-    Pdas=Pdas/np.max(np.abs(Pdas))
-    Pdas=np.reshape(Pdas,(64,64))
-    Pdas=Pdas.astype(np.float32)
-    SSIM[i1,3]=structural_similarity(trueimage,Pdas) 
-    PC[i1,3]=stats.pearsonr(trueimage.ravel(),Pdas.ravel())[0]  
-    RMSE[i1,3]=math.sqrt(mean_squared_error(trueimage,Pdas))
-    PSNR[i1,3]=peak_signal_noise_ratio(trueimage,Pdas)
-  return SSIM,PC,RMSE,PSNR
+        Pdas = applyDAS(X[i1,:,:])
+        Pdas=Pdas/np.max(np.abs(Pdas))
+        Pdas=np.reshape(Pdas,(64,64))
+        Pdas=Pdas.astype(np.float32)
+        SSIM[i1,3]=structural_similarity(trueimage,Pdas) 
+        PC[i1,3]=stats.pearsonr(trueimage.ravel(),Pdas.ravel())[0]  
+        RMSE[i1,3]=math.sqrt(mean_squared_error(trueimage,Pdas))
+        PSNR[i1,3]=peak_signal_noise_ratio(trueimage,Pdas)
+    return SSIM,PC,RMSE,PSNR
 
 def testing(SSIM,PC,RMSE,PSNR,loader,Ao,model,model_nc):
-  dim = SSIM.shape
-  nx = 64; 
-  Dx = 100e-6
-  tim = nx*Dx
-  for j in range(dim[0]):
-    print(f"\n Environment {j} \n")
-    print('############################################################### \n')
-    print('Metrics results NET (ANDMask): \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,0]),3), ' PC: ', round(np.mean(PC[j,:,:,0]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,0]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,0]),3))
-    print('Metrics results NET (benchmark): \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,1]),3), ' PC: ', round(np.mean(PC[j,:,:,1]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,1]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,1]),3))    
-    print('Metrics results LBP: \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,2]),3), ' PC: ', round(np.mean(PC[j,:,:,2]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,2]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,2]),3))
-    print('Metrics results DAS: \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,3]),3), ' PC: ', round(np.mean(PC[j,:,:,3]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,3]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,3]),3))
-    print('\n')
-    print('############################################################### \n')
-    colormap=plt.cm.gist_heat
-    plt.figure(figsize=(19.2, 14.4))
-    plt.suptitle('Environment'+str(j),y=0.65)
-    plt.grid(False)
-    plt.subplot(1,5,1); plt.title('True image',fontsize=12);
-    plt.subplots_adjust(wspace=0.5)
-    dataset = next(iter(loader[j]))
-    rnd_idx = np.random.randint(len(dataset[0]))
-    sinogram = dataset[0][rnd_idx]
-    trueimage = dataset[1][rnd_idx]
-    Pdas = applyDAS(sinogram)
-    Pdas=Pdas/np.max(np.abs(Pdas))
-    Pdas=np.reshape(Pdas,(64,64))
-    Pdas=Pdas.astype(np.float32)
-    Plbp = Ao.T@sinogram.ravel()
-    Plbp = Plbp.detach().numpy() 
-    Plbp=Plbp/np.max(np.abs(Plbp))
-    Plbp=np.reshape(Plbp,(64,64))
-    Plbp=Plbp.astype(np.float32)
-    predimage = predicting(model,sinogram.view(1,sinogram.shape[0],sinogram.shape[1]), Ao, "cpu").detach().numpy()
-    predimage_nc = predicting(model_nc,sinogram.view(1,sinogram.shape[0],sinogram.shape[1]), Ao, "cpu").detach().numpy()
+    dim = SSIM.shape
+    nx = 64; 
+    Dx = 100e-6
+    tim = nx*Dx
+    for j in range(dim[0]):
+        print(f"\n Environment {j} \n")
+        print('############################################################### \n')
+        print('Metrics results NET (ANDMask): \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,0]),3), ' PC: ', round(np.mean(PC[j,:,:,0]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,0]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,0]),3))
+        print('Metrics results NET (benchmark): \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,1]),3), ' PC: ', round(np.mean(PC[j,:,:,1]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,1]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,1]),3))    
+        print('Metrics results LBP: \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,2]),3), ' PC: ', round(np.mean(PC[j,:,:,2]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,2]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,2]),3))
+        print('Metrics results DAS: \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,3]),3), ' PC: ', round(np.mean(PC[j,:,:,3]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,3]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,3]),3))
+        print('\n')
+        print('############################################################### \n')
+        colormap=plt.cm.gist_heat
+        plt.figure(figsize=(19.2, 14.4))
+        plt.suptitle('Environment'+str(j),y=0.65)
+        plt.grid(False)
+        plt.subplot(1,5,1); plt.title('True image',fontsize=12);
+        plt.subplots_adjust(wspace=0.5)
+        dataset = next(iter(loader[j]))
+        rnd_idx = np.random.randint(len(dataset[0]))
+        sinogram = dataset[0][rnd_idx]
+        trueimage = dataset[1][rnd_idx]
+        Pdas = applyDAS(sinogram)
+        Pdas=Pdas/np.max(np.abs(Pdas))
+        Pdas=np.reshape(Pdas,(64,64))
+        Pdas=Pdas.astype(np.float32)
+        Plbp = Ao.T@sinogram.ravel()
+        Plbp = Plbp.detach().numpy() 
+        Plbp=Plbp/np.max(np.abs(Plbp))
+        Plbp=np.reshape(Plbp,(64,64))
+        Plbp=Plbp.astype(np.float32)
+        predimage = predicting(model,sinogram.view(1,sinogram.shape[0],sinogram.shape[1]), Ao, "cpu").detach().numpy()
+        predimage_nc = predicting(model_nc,sinogram.view(1,sinogram.shape[0],sinogram.shape[1]), Ao, "cpu").detach().numpy()
     
-    plt.imshow(trueimage, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);
-    plt.subplot(1,5,2);plt.title('DAS reconstruction',fontsize=12);
-    plt.imshow(Pdas, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);  
-    plt.subplot(1,5,3);plt.title('LBP reconstruction',fontsize=12);
-    plt.imshow(Plbp, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);
-    plt.subplot(1,5,4);plt.title('Benchmark recosntruction',fontsize=12);
-    plt.imshow(predimage_nc[0,:,:], aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);  
-    plt.subplot(1,5,5);plt.title('ANDMask recosntruction',fontsize=12);
-    plt.imshow(predimage[0,:,:], aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);    
+        plt.imshow(trueimage, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);
+        plt.subplot(1,5,2);plt.title('DAS reconstruction',fontsize=12);
+        plt.imshow(Pdas, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);  
+        plt.subplot(1,5,3);plt.title('LBP reconstruction',fontsize=12);
+        plt.imshow(Plbp, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);
+        plt.subplot(1,5,4);plt.title('Benchmark recosntruction',fontsize=12);
+        plt.imshow(predimage_nc[0,:,:], aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);  
+        plt.subplot(1,5,5);plt.title('ANDMask recosntruction',fontsize=12);
+        plt.imshow(predimage[0,:,:], aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);    
