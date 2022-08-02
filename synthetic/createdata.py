@@ -37,8 +37,9 @@ def create_trainatestdata(cache_dir):
     t = np.linspace(to, tf, Nt) # time grid
     
     # sensor position error [%] 
-    spe=np.array([3.8851, -0.5203, -0.18240, 0.06080, 0.00034]) # %
-    spetest = np.array([2.9516, 0.00012]) # %
+    spe=np.array([1.8851, 0.5203, -1.18240, 0.06080, -0.00034]) # %
+    spetest = np.array([4.9516, 0.00012]) # %
+    
     
     # set aside images for testing
     aux = IM

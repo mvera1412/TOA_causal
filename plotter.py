@@ -48,7 +48,7 @@ def convex_envelope(x, fs):
 
 
 
-# Epoch - LR - wc - bs - at - loss 
+print('Epoch - LR - wc - bs - at - loss') 
 file_name = str(Path.home()) + '/TOA_causal/log.txt'
 M= np.loadtxt(file_name)
 best = np.argmin(M[:,5])

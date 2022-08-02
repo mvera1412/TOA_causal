@@ -180,7 +180,7 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ck
             'batchsize': checkpoint['batchsize'],
             'agreement_threshold': checkpoint['agreement_threshold']
                 }
-    open('log.txt','a').write(str(checkpoint['epoch'])+'\t'+str(checkpoint['learning_rate'])+'\t'+str(checkpoint['weight_cost'])+'\t'+str(checkpoint['batchsize'])+'\t'+str(checkpoint['agreement_threshold'])+'\t'+str(val_loss)+'\n')
+    open('loss.txt','a').write(str(checkpoint['epoch'])+'\t'+str(checkpoint['learning_rate'])+'\t'+str(checkpoint['weight_cost'])+'\t'+str(checkpoint['batchsize'])+'\t'+str(checkpoint['agreement_threshold'])+'\t'+str(val_loss)+'\n')
     torch.save(checkpoint, ckp_last)
     if val_loss < valid_loss_min:
         valid_loss_min = val_loss
