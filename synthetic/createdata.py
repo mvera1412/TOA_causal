@@ -37,8 +37,8 @@ def create_trainatestdata(cache_dir):
     t = np.linspace(to, tf, Nt) # time grid
     
     # sensor position error [%] 
-    spe=np.array([1.8851, 0.5203, -1.18240, 0.06080, -0.00034]) # %
-    spetest = np.array([4.9516, 0.00012]) # %
+    spe=np.array([1.0, 0.1, 0.01, 0.001, 0.0001]) # %
+    spetest = np.array([0.0, 1.5]) # %
     
     
     # set aside images for testing
@@ -74,7 +74,7 @@ def create_trainatestdata(cache_dir):
     # Iteration for each image or sinogram for training
     for i1 in range(0,len(spe)):
         cont = -nsnr # Counter index
-        IMb = IM[:,i1:(i1+1)*nb]
+        IMb = IM[:,i1*nb:(i1+1)*nb]
         print('Creating Forward Model-based Matrix with position uncertainty')
         dsae = dsa + dsa*spe[i1]/100 
         posSens = SensorMaskCartCircleArc(dsae,arco,Ns) # position of the center of the detectors (3,Ns) [m]
@@ -169,7 +169,7 @@ def create_trainatestdata(cache_dir):
     # Iteration for each image or sinogram for testing
     for i1 in range(0,len(spetest)):
         cont = -nsnr # Counter index
-        IMb = IMtest[:,i1:(i1+1)*nb]
+        IMb = IMtest[:,i1*nb:(i1+1)*nb]
         print('Creating Forward Model-based Matrix with position uncertainty')
         dsae = dsa + dsa*spetest[i1]/100 
         posSens = SensorMaskCartCircleArc(dsae,arco,Ns) # position of the center of the detectors (3,Ns) [m]

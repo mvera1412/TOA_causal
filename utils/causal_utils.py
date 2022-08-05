@@ -1,12 +1,6 @@
 import torch
-#import ignite
 import numpy as np
 import os
-#import shutil
-
-#from TOA.mbfdunetln import MBPFDUNet
-#from ANDMask.adam_flexible_weight_decay import AdamFlexibleWeightDecay
-#from torch.optim.lr_scheduler import MultiStepLR
 from TOA.predict import applyDAS
 import ANDMask.and_mask_utils as and_mask_utils
 from ANDMask.common import permutation_groups
@@ -93,7 +87,7 @@ def load_ckp(checkpoint_fpath, model, optimizer):
     model.load_state_dict(checkpoint['state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     loss = checkpoint['valid_loss_min'] 
-    return model, optimizer, checkpoint['epoch'], loss, checkpoint['learning_rate'], checkpoint['weight_cost'], checkpoint['batchsize'], checkpoint['agreement_threshold']
+    return model, optimizer, checkpoint['epoch'], loss, checkpoint['learning_rate'], checkpoint['batchsize'], checkpoint['agreement_threshold']
 
 
 
@@ -176,11 +170,10 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ck
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
             'learning_rate': checkpoint['learning_rate'], 
-            'weight_cost': checkpoint['weight_cost'],
             'batchsize': checkpoint['batchsize'],
             'agreement_threshold': checkpoint['agreement_threshold']
                 }
-    open('loss.txt','a').write(str(checkpoint['epoch'])+'\t'+str(checkpoint['learning_rate'])+'\t'+str(checkpoint['weight_cost'])+'\t'+str(checkpoint['batchsize'])+'\t'+str(checkpoint['agreement_threshold'])+'\t'+str(val_loss)+'\n')
+    open('loss.txt','a').write(str(checkpoint['epoch'])+'\t'+str(checkpoint['learning_rate'])+'\t'+str(checkpoint['batchsize'])+'\t'+str(checkpoint['agreement_threshold'])+'\t'+str(val_loss)+'\n')
     torch.save(checkpoint, ckp_last)
     if val_loss < valid_loss_min:
         valid_loss_min = val_loss
