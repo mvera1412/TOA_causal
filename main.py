@@ -10,13 +10,12 @@ from utils.noncausal_utils import load_traindataset_nc,train_nc
 
 batchsize = 3 #per environment
 val_percent = 440.0/2216.0 # 440 para validacion, 1776 para train
-le = 5
+le = 2
 epochs = 50
 lr = 1e-4
-wd= 1e-6
 agreement_threshold = 0.3 
 cache_dir = 'data/cache/'
-fecha = '250722_11'
+fecha = ''
 continue_training = False
     
 if __name__ == '__main__':
