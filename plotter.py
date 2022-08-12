@@ -48,115 +48,91 @@ def convex_envelope(x, fs):
 
 
 
-print('Epoch - LR - wc - bs - at - loss') 
-file_name = str(Path.home()) + '/TOA_causal/log.txt'
+print('Epoch - LR - bs - at - loss') 
+file_name = str(Path.home()) + '/TOA_causal/log-050822_17.txt'
 M= np.loadtxt(file_name)
-best = np.argmin(M[:,5])
+best = np.argmin(M[:,4])
 print(f'best results: {M[best,:]}')
-M_benchmark = M[M[:,4]==0.0,:]
-best_benchmark = np.argmin(M_benchmark[:,5])
+M_benchmark = M[M[:,3]==0.0,:]
+best_benchmark = np.argmin(M_benchmark[:,4])
 print(f'best benchmark results: {M_benchmark[best_benchmark,:]}')
-M_causal= M[M[:,4]!=0.0,:]
-best_causal = np.argmin(M_causal[:,5])
+M_causal= M[M[:,3]!=0.0,:]
+best_causal = np.argmin(M_causal[:,4])
 print(f'best causal results: {M_causal[best_causal,:]}')
 
-lr,wc,bs,tau =M_causal[best_causal,1:5]
-idxs = (M_causal[:,1]==lr) & (M_causal[:,2]==wc) & (M_causal[:,3]==bs) & (M_causal[:,4]==tau)
-plt.plot(M_causal[idxs,0],M_causal[idxs,5], label = 'Causal')
-lr,wc,bs =M_benchmark[best_benchmark,1:4]
-idxs = (M_benchmark[:,1]==lr) & (M_benchmark[:,2]==wc) & (M_benchmark[:,3]==bs) & (M_benchmark[:,4]==0.0)
-plt.plot(M_benchmark[idxs,0],M_benchmark[idxs,5], label = 'Benchmark')
-plt.axis([1,50,0,0.2])
+lr,bs,tau =M_causal[best_causal,1:4]
+idxs = (M_causal[:,1]==lr) & (M_causal[:,2]==bs) & (M_causal[:,3]==tau)
+plt.plot(M_causal[idxs,0],M_causal[idxs,4], label = 'Causal')
+lr,bs =M_benchmark[best_benchmark,1:3]
+idxs = (M_benchmark[:,1]==lr) & (M_benchmark[:,2]==bs) & (M_benchmark[:,3]==0.0)
+plt.plot(M_benchmark[idxs,0],M_benchmark[idxs,4], label = 'Benchmark')
+plt.axis([1,50,0,0.1])
 plt.legend()
 plt.show() 
 
 
 alphas = np.unique(M[:,1])
-weight_costs = np.unique(M[:,2])
-batchsizes = np.unique(M[:,3])
-thresholds = np.unique(M[:,4])
-
-## Focalizo sobre el wc - Parece no ser necesario
-
-for wc in weight_costs:
-    M_new = M_causal[M_causal[:,2]==wc,:]
-    best = np.argmin(M_new[:,5])
-    lr,bs,tau = M_new[best,[1,3,4]]
-    idxs = (M[:,1]==lr) & (M[:,2]==wc) & (M[:,3]==bs) & (M[:,4]==tau)
-    x = M[idxs,0]
-    y = M[idxs,5]
-    envelopes = convex_envelope(x,y)    
-    plt.plot(x[envelopes],y[envelopes], label = 'Causal with wc = '+str(wc))
-    M_new = M_benchmark[M_benchmark[:,2]==wc,:]
-    best = np.argmin(M_new[:,5])
-    lr,bs = M_new[best,[1,3]]
-    idxs = (M[:,1]==lr) & (M[:,2]==wc) & (M[:,3]==bs) & (M[:,4]==0.0)
-    x = M[idxs,0]
-    y = M[idxs,5]
-    envelopes = convex_envelope(x,y)    
-    plt.plot(x[envelopes],y[envelopes], label = 'Benchmark with wc = '+str(wc))
-plt.axis([1,50,0.002,0.05])
-plt.legend()
-plt.show()   
+batchsizes = np.unique(M[:,2])
+thresholds = np.unique(M[:,3])
 
 ## Focalizo sobre el bs - Siempre gana el mas chico
 for bs in batchsizes:
-    M_new = M_causal[M_causal[:,3]==bs,:]
-    best = np.argmin(M_new[:,5])
-    lr,wc,tau = M_new[best,[1,2,4]]
-    idxs = (M[:,1]==lr) & (M[:,2]==wc) & (M[:,3]==bs) & (M[:,4]==tau)
+    M_new = M_causal[M_causal[:,2]==bs,:]
+    best = np.argmin(M_new[:,4])
+    lr,tau = M_new[best,[1,3]]
+    idxs = (M[:,1]==lr) & (M[:,2]==bs) & (M[:,3]==tau)
     x = M[idxs,0]
-    y = M[idxs,5]
+    y = M[idxs,4]
     envelopes = convex_envelope(x,y)    
     plt.plot(x[envelopes],y[envelopes], label = 'Causal with bs = '+str(bs))
-    M_new = M_benchmark[M_benchmark[:,3]==bs,:]
-    best = np.argmin(M_new[:,5])
-    lr,wc = M_new[best,[1,2]]
-    idxs = (M[:,1]==lr) & (M[:,2]==wc) & (M[:,3]==bs) & (M[:,4]==0.0)
+    M_new = M_benchmark[M_benchmark[:,2]==bs,:]
+    best = np.argmin(M_new[:,4])
+    lr = M_new[best,1]
+    idxs = (M[:,1]==lr) & (M[:,2]==bs) & (M[:,3]==0.0)
     x = M[idxs,0]
-    y = M[idxs,5]
+    y = M[idxs,4]
     envelopes = convex_envelope(x,y)    
     plt.plot(x[envelopes],y[envelopes], label = 'Benchmark with bs = '+str(bs))
-plt.axis([1,50,0.002,0.05])
+plt.axis([1,50,0,0.02])
 plt.legend()
 plt.show() 
 
-## Focalizo sobre el lr - El de 0.01 no anda; Mas chico que 0.0001 no tiene sentido en 50 epochs
+## Focalizo sobre el lr 
 
 for lr in alphas:
     M_new = M_causal[M_causal[:,1]==lr,:]
-    best = np.argmin(M_new[:,5])
-    wc,bs,tau = M_new[best,[2,3,4]]
-    idxs = (M[:,1]==lr) & (M[:,2]==wc) & (M[:,3]==bs) & (M[:,4]==tau)
+    best = np.argmin(M_new[:,4])
+    bs,tau = M_new[best,[2,3]]
+    idxs = (M[:,1]==lr) & (M[:,2]==bs) & (M[:,3]==tau)
     x = M[idxs,0]
-    y = M[idxs,5]
+    y = M[idxs,4]
     envelopes = convex_envelope(x,y)    
     plt.plot(x[envelopes],y[envelopes], label = 'Causal with lr = '+str(lr))
     M_new = M_benchmark[M_benchmark[:,1]==lr,:]
-    best = np.argmin(M_new[:,5])
-    wc,bs = M_new[best,[2,3]]
-    idxs = (M[:,1]==lr) & (M[:,2]==wc) & (M[:,3]==bs) & (M[:,4]==0.0)
+    best = np.argmin(M_new[:,4])
+    bs = M_new[best,2]
+    idxs = (M[:,1]==lr) & (M[:,2]==bs) & (M[:,3]==0.0)
     x = M[idxs,0]
-    y = M[idxs,5]
+    y = M[idxs,4]
     try: 
         envelopes = convex_envelope(x,y)    
         plt.plot(x[envelopes],y[envelopes], label = 'Benchmark with lr = '+str(lr))
     except:
-        print(f'Imposible {lr},{wc},{bs}')
-plt.axis([1,50,0.002,0.05])
+        print(f'Imposible {lr},{bs}')
+plt.axis([1,50,0,0.02])
 plt.legend()
 plt.show() 
 
 ## Focalizo en el umbral
 for tau in thresholds:
-    M_new = M[M[:,4]==tau,:]
-    best = np.argmin(M_new[:,5])
-    lr,wc,bs = M_new[best,[1,2,3]]
-    idxs = (M[:,1]==lr) & (M[:,2]==wc) & (M[:,3]==bs) & (M[:,4]==tau)
+    M_new = M[M[:,3]==tau,:]
+    best = np.argmin(M_new[:,4])
+    lr,bs = M_new[best,[1,2]]
+    idxs = (M[:,1]==lr) & (M[:,2]==bs) & (M[:,3]==tau)
     x = M[idxs,0]
-    y = M[idxs,5]
+    y = M[idxs,4]
     envelopes = convex_envelope(x,y)    
     plt.plot(x[envelopes],y[envelopes], label = 'Causal with tau = '+str(tau))
-plt.axis([1,50,0.002,0.05])
+plt.axis([1,50,0,0.005])
 plt.legend()
 plt.show() 
