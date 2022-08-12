@@ -10,7 +10,7 @@ Obviamente se puede cambiar el directorio donde guardar los datos, pero recordar
 	spetest = np.array([0.0, 1.5])
 	
 ### Correr desde Jupyter
-Hay que ejecutar las celdas de "~/TOA_causal/TUPAC_toa.ipynb". Guardará los modelos en la carpeta donde están los datos, un log con resultados de validación en "~/TOA_causal" y mostrará los resultados de test por pantalla. 
+Hay que ejecutar las celdas de "\~/TOA_causal/TUPAC_toa.ipynb". Guardará los modelos en la carpeta donde están los datos, un log con resultados de validación en "~/TOA_causal" y mostrará los resultados de test por pantalla. 
 
 ### Correr por consola
 Hay que ejecutar el archivo main.py. Su comportamiento es simil a la versión jupyter. Observar las variables del encabezado, las mismas deberán ser ajustadas de acuerdo a las necesidades:
