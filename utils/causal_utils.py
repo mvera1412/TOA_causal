@@ -10,6 +10,7 @@ from skimage.metrics import structural_similarity
 from skimage.metrics import mean_squared_error
 from skimage.metrics import peak_signal_noise_ratio 
 import matplotlib.pyplot as plt
+import IRMv1.algorithm
 
 
 def load_traindataset(cache_dir,val_percent,train_batchsize,val_batchsize,le):
@@ -128,7 +129,7 @@ def train(model, device, train_loaders, optimizer,
         optimizer.zero_grad()
 
         output = predicting(model, inputs, Ao, device)
-        mean_loss, masks = and_mask_utils.get_grads(
+        """mean_loss, masks = and_mask_utils.get_grads(
             agreement_threshold,
             batch_size,
             loss_fn, n_agreement_envs,
@@ -137,10 +138,20 @@ def train(model, device, train_loaders, optimizer,
             target=target,
             method='and_mask',
             scale_grad_inverse_sparsity=1,
+        )"""
+        irm_lambda = 10000.0
+        IRMv1.algorithm.compute_grads(
+            irm_lambda,
+            batch_size,
+            loss_fn=None,
+            n_envs=n_agreement_envs,
+            model_params=list(model.parameters()),
+            output=output,
+            target=target,
         )
         optimizer.step()
 
-        losses.append(mean_loss.item())
+        # losses.append(mean_loss.item())
         example_count += output.shape[0]
         batch_idx += 1
 
