@@ -1,6 +1,8 @@
 import torch
 from torch import Tensor
-from typing import Callable
+from typing import Callable, Union
+
+l2_regularizer_weight = 0.001
 
 
 def mean_nll(logits, y):
@@ -8,7 +10,9 @@ def mean_nll(logits, y):
 
 
 def penalty(logits, y, loss_fn: Callable):
-    """Uses dummy linear classfier w of value 1.0"""
+    """Uses dummy linear classfier w of value 1.0.
+    The loss and the grad are both "sizeless" tensors (scalar tensors).
+    """
     scale = torch.tensor(1.).requires_grad_()
     loss = loss_fn(logits * scale, y)
     grad = torch.autograd.grad(loss, [scale], create_graph=True)[0]
@@ -17,7 +21,7 @@ def penalty(logits, y, loss_fn: Callable):
 
 def compute_grads(irm_lambda: float,
                   batch_size: int,
-                  loss_fn: Callable,
+                  loss_fn: Union[Callable, None],
                   n_envs: int,
                   model_params: list,
                   output: Tensor,
@@ -39,6 +43,26 @@ def compute_grads(irm_lambda: float,
         losses['nll'] = loss_fn(env_outputs, env_targets)
         losses['penalty'] = penalty(env_outputs, env_targets, loss_fn)
 
-    train_nll = torch.stack([envs[0]['nll'], envs[1]['nll']]).mean()
+    train_nll = torch.stack([env_loss['nll'] for env_loss in env_losses]).mean()
+    train_penalty = torch.stack([env_loss['penalty'] for env_loss in env_losses]).mean()
 
-    pass
+    weight_norm = torch.tensor(0.).to(device='cpu')
+    for w in model_params:
+        weight_norm += w.norm().pow(2)
+
+    # LOSS: nll ERM term
+    loss: torch.Tensor = train_nll.clone()
+    # LOSS: L2 term
+    loss += l2_regularizer_weight * weight_norm
+
+    # this uses the current epoch number to apply a penalty. For now just hardocde it
+    #penalty_weight_applied = penalty_weight if step >= flags.penalty_anneal_iters else 1.0
+
+    # LOSS: IRM term
+    loss += irm_lambda * train_penalty  # irm_lambda == penalty_weight
+    if irm_lambda > 1.0:
+        # Rescale the entire loss to keep gradients in a reasonable range
+        loss /= irm_lambda
+
+    loss.backward()
+    return
