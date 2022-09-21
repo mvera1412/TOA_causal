@@ -10,7 +10,8 @@ from utils.noncausal_utils import load_traindataset_nc,train_nc
 val_percent = 440.0/2216.0 # 440 para validacion, 1776 para train
 le = 5 # cantidad de environments
 epochs = 50
-cache_dir = '../data/' # Donde estan los datos y donde se van a guardar los modelos
+# cache_dir = '../data/' # Donde estan los datos y donde se van a guardar los modelosç
+cache_dir = "datos_toa"
 fecha = '120822_15'
 alphas = [1e-4,5e-4,1e-3]
 bs = [1,2,3] # per environment
