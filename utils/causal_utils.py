@@ -148,6 +148,7 @@ def train(model, device, train_loaders, optimizer,
             model_params=list(model.parameters()),
             output=output,
             target=target,
+            device=device,
         )
         optimizer.step()
 

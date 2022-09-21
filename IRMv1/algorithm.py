@@ -25,7 +25,8 @@ def compute_grads(irm_lambda: float,
                   n_envs: int,
                   model_params: list,
                   output: Tensor,
-                  target: Tensor
+                  target: Tensor,
+                  device: torch.device
                   ):
     """Sets gradient values using outputs, targets and loss_fn(outputs, targets).
         * optimizer.zero_grad() called before entering this function
@@ -46,7 +47,7 @@ def compute_grads(irm_lambda: float,
     train_nll = torch.stack([env_loss['nll'] for env_loss in env_losses]).mean()
     train_penalty = torch.stack([env_loss['penalty'] for env_loss in env_losses]).mean()
 
-    weight_norm = torch.tensor(0.).to(device='cpu')
+    weight_norm = torch.tensor(0.).to(device=device)
     for w in model_params:
         weight_norm += w.norm().pow(2)
 
