@@ -1,3 +1,5 @@
+from typing import Union
+
 import torch
 import numpy as np
 import os
@@ -8,10 +10,14 @@ import math
 from scipy import stats
 from skimage.metrics import structural_similarity
 from skimage.metrics import mean_squared_error
-from skimage.metrics import peak_signal_noise_ratio 
+from skimage.metrics import peak_signal_noise_ratio
 import matplotlib.pyplot as plt
 import IRMv1.algorithm
+from clients.wandb.client import Client as WandbClient
+from clients.wandb.client import DummyClient
 
+
+dummy_client = DummyClient()
 
 def load_traindataset(cache_dir,val_percent,train_batchsize,val_batchsize,le):
     train_loaders = []
@@ -54,7 +60,7 @@ def applyInvMat(x, Ao, dimS, dimI): # [Ao] = (16384,4096)
     x = torch.reshape(x,(dimS[0],int(dimS[2]*dimS[3]))) # (-1,16384)
     y = torch.matmul(Ao.T,x.T).T # ((4096,16384) @ (16384,-1)).T = (-1,4096)
     y = torch.reshape(y,(dimI[0],dimI[2],dimI[3])) # (-1,64,64)
-    y = torch.unsqueeze(y,1) # (-1,1,64,64)  
+    y = torch.unsqueeze(y,1) # (-1,1,64,64)
     return y
 
 def applyForwMat(y, Ao, dimS, dimI):
@@ -62,7 +68,7 @@ def applyForwMat(y, Ao, dimS, dimI):
     y = torch.reshape(y,(dimI[0],int(dimI[2]*dimI[3]))) # (-1,4096)
     x = torch.matmul(Ao,y.T).T # ((16384,4096) @ (4096,-1)).T = (-1,16384)
     x = torch.reshape(x,(dimS[0],dimS[2],dimS[3])) # (-1,32,512)
-    x = torch.unsqueeze(x,1) # (-1,1,32,512)    
+    x = torch.unsqueeze(x,1) # (-1,1,32,512)
     return x
 
 def predicting(net, input, Ao, device):
@@ -87,9 +93,39 @@ def load_ckp(checkpoint_fpath, model, optimizer):
     checkpoint = torch.load(checkpoint_fpath)
     model.load_state_dict(checkpoint['state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer'])
-    loss = checkpoint['valid_loss_min'] 
+    loss = checkpoint['valid_loss_min']
     return model, optimizer, checkpoint['epoch'], loss, checkpoint['learning_rate'], checkpoint['batchsize'], checkpoint['agreement_threshold']
 
+
+def compute_and_log_metrics(wandb_client, datas, Ao, model, device):
+    metric_dicts = {
+        "SSIM": [], "PC": [], "RMSE": [], "PSNR": []
+    }
+    for d in datas:
+        x = d[0]
+        y = d[1]
+        metrics = computing_metrics(x.to(device), y.to(device), Ao.to(device=device),model, model_nc=None, as_dict=True)
+        for k in metric_dicts.keys():
+            metric_dicts[k].extend(metrics[k])
+    metrics = metric_dicts
+    f = lambda x: np.mean(x).item()
+    try:
+        metrics_to_log = {
+            "SSIM_batch_mean": f(metrics["SSIM"]),
+            "PC_batch_mean": f(metrics["PC"]),
+            "RMSE_batch_mean": f(metrics["RMSE"]),
+            "PSNR_batch_mean": f(metrics["PSNR"]),
+        }
+    except:
+        print("Logging only first item of losses")
+        f = lambda x: x[0]
+        metrics_to_log = {
+            "SSIM_batch_mean": f(metrics["SSIM"]),
+            "PC_batch_mean": f(metrics["PC"]),
+            "RMSE_batch_mean": f(metrics["RMSE"]),
+            "PSNR_batch_mean": f(metrics["PSNR"]),
+        }
+    wandb_client.log(metrics=metrics_to_log)
 
 
 def train(model, device, train_loaders, optimizer,
@@ -97,9 +133,13 @@ def train(model, device, train_loaders, optimizer,
           loss_fn,
           Ao,
           agreement_threshold,
-          scheduler):
+          scheduler,
+          epoch=None,
+          wandb_client: Union[WandbClient, DummyClient] = None):
     """
 
+    :param epoch: epoch number
+    :param wandb_client: for logging metrics
     :param train_loaders: list of DataLoader objects, one for each environment.
         iter(train_loaders[i]) returns the i-th environment iterator through pairs (batch_inputs, batch_targets)
         next(iter(train_loaders[i])) returns the pair (batch_inputs, batch_targets) of sizes:
@@ -107,6 +147,8 @@ def train(model, device, train_loaders, optimizer,
             batch_targets.size() = (batch_size, height, width)
     :return:
     """
+    if wandb_client is None:
+        wandb_client = dummy_client
 
     model.train()
 
@@ -164,11 +206,12 @@ def train(model, device, train_loaders, optimizer,
         # losses.append(mean_loss.item())
         example_count += output.shape[0]
         batch_idx += 1
-
+        if (batch_idx % 5 == 0) or (batch_idx == batch_size - 1):
+            compute_and_log_metrics(wandb_client, datas, Ao, model, device)
     scheduler.step()
 
-    
-def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ckp_last, ckp_best,fecha):    
+
+def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ckp_last, ckp_best,fecha):
     valid_loss_min = checkpoint['valid_loss_min']
     val_loss = 0.0
     bs = val_loader.batch_size
@@ -183,14 +226,14 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ck
             predv = predicting(model, datas[0].to(device), Ao, device)
             loss = loss_fn(predv, datas[1].to(device))
             val_loss += bs * loss.item()
-    val_loss = val_loss / n_val     
+    val_loss = val_loss / n_val
 
     checkpoint = {
             'epoch': checkpoint['epoch'],
             'valid_loss_min': np.min((valid_loss_min,val_loss)),
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
-            'learning_rate': checkpoint['learning_rate'], 
+            'learning_rate': checkpoint['learning_rate'],
             'batchsize': checkpoint['batchsize'],
             'agreement_threshold': checkpoint['agreement_threshold']
                 }
@@ -199,12 +242,13 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ck
     if val_loss < valid_loss_min:
         valid_loss_min = val_loss
         torch.save(checkpoint, ckp_best)
-    return valid_loss_min 
+    return valid_loss_min
 
-def computing_metrics(X,Y,Ao,model,model_nc, as_dict=False):
+def computing_metrics(X,Y,Ao,model,model_nc=None, device="cpu", as_dict=False):
     bs = X.shape[0]
-    pred = predicting(model,X, Ao.to(device="cpu"), "cpu")
-    pred_nc = predicting(model_nc,X, Ao.to(device="cpu"), "cpu")
+    pred = predicting(model,X, Ao.to(device=device), device=device)
+    if model_nc:
+        pred_nc = predicting(model_nc,X, Ao.to(device=device), device=device)
     SSIM=np.zeros((bs,4))
     PC=np.zeros((bs,4))
     RMSE=np.zeros((bs,4))
@@ -213,56 +257,57 @@ def computing_metrics(X,Y,Ao,model,model_nc, as_dict=False):
         trueimage=Y[i1,:,:].detach().numpy()
         predimage=pred[i1,:,:].detach().numpy()
         predimage=predimage/np.max(np.abs(predimage))
-        SSIM[i1,0]=structural_similarity(trueimage,predimage) 
-        PC[i1,0]=stats.pearsonr(trueimage.ravel(),predimage.ravel())[0]  
+        SSIM[i1,0]=structural_similarity(trueimage,predimage)
+        PC[i1,0]=stats.pearsonr(trueimage.ravel(),predimage.ravel())[0]
         RMSE[i1,0]=math.sqrt(mean_squared_error(trueimage,predimage))
         PSNR[i1,0]=peak_signal_noise_ratio(trueimage,predimage)
-    
-        predimage=pred_nc[i1,:,:].detach().numpy()
-        predimage=predimage/np.max(np.abs(predimage))
-        SSIM[i1,1]=structural_similarity(trueimage,predimage) 
-        PC[i1,1]=stats.pearsonr(trueimage.ravel(),predimage.ravel())[0]  
-        RMSE[i1,1]=math.sqrt(mean_squared_error(trueimage,predimage))
-        PSNR[i1,1]=peak_signal_noise_ratio(trueimage,predimage)
-    
+        if model_nc:
+            predimage=pred_nc[i1,:,:].detach().numpy()
+            predimage=predimage/np.max(np.abs(predimage))
+            SSIM[i1,1]=structural_similarity(trueimage,predimage)
+            PC[i1,1]=stats.pearsonr(trueimage.ravel(),predimage.ravel())[0]
+            RMSE[i1,1]=math.sqrt(mean_squared_error(trueimage,predimage))
+            PSNR[i1,1]=peak_signal_noise_ratio(trueimage,predimage)
+
         Plbp = Ao.T@X[i1,:,:].ravel()
         Plbp = Plbp.detach().numpy()
         Plbp=Plbp/np.max(np.abs(Plbp))
         Plbp=np.reshape(Plbp,(64,64))
         Plbp=Plbp.astype(np.float32)
-        SSIM[i1,2]=structural_similarity(trueimage,Plbp) 
-        PC[i1,2]=stats.pearsonr(trueimage.ravel(),Plbp.ravel())[0]  
+        SSIM[i1,2]=structural_similarity(trueimage,Plbp)
+        PC[i1,2]=stats.pearsonr(trueimage.ravel(),Plbp.ravel())[0]
         RMSE[i1,2]=math.sqrt(mean_squared_error(trueimage,Plbp))
         PSNR[i1,2]=peak_signal_noise_ratio(trueimage,Plbp)
-    
+
         Pdas = applyDAS(X[i1,:,:])
         Pdas=Pdas/np.max(np.abs(Pdas))
         Pdas=np.reshape(Pdas,(64,64))
         Pdas=Pdas.astype(np.float32)
-        SSIM[i1,3]=structural_similarity(trueimage,Pdas) 
-        PC[i1,3]=stats.pearsonr(trueimage.ravel(),Pdas.ravel())[0]  
+        SSIM[i1,3]=structural_similarity(trueimage,Pdas)
+        PC[i1,3]=stats.pearsonr(trueimage.ravel(),Pdas.ravel())[0]
         RMSE[i1,3]=math.sqrt(mean_squared_error(trueimage,Pdas))
         PSNR[i1,3]=peak_signal_noise_ratio(trueimage,Pdas)
     if as_dict:
+        # for now, only log metrics associated with causal model
         metrics = {
-            'SSIM': SSIM,
-            'PC': PC,
-            'RMSE': RMSE,
-            'PSNR': PSNR,
+            'SSIM': SSIM[:, 0],
+            'PC': PC[:, 0],
+            'RMSE': RMSE[:, 0],
+            'PSNR': PSNR[:, 0],
         }
         return metrics
     return SSIM,PC,RMSE,PSNR
 
 def testing(SSIM,PC,RMSE,PSNR,loader,Ao,model,model_nc):
     dim = SSIM.shape
-    nx = 64; 
+    nx = 64;
     Dx = 100e-6
     tim = nx*Dx
     for j in range(dim[0]):
         print(f"\n Environment {j} \n")
         print('############################################################### \n')
         print('Metrics results NET (ANDMask): \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,0]),3), ' PC: ', round(np.mean(PC[j,:,:,0]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,0]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,0]),3))
-        print('Metrics results NET (benchmark): \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,1]),3), ' PC: ', round(np.mean(PC[j,:,:,1]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,1]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,1]),3))    
+        print('Metrics results NET (benchmark): \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,1]),3), ' PC: ', round(np.mean(PC[j,:,:,1]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,1]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,1]),3))
         print('Metrics results LBP: \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,2]),3), ' PC: ', round(np.mean(PC[j,:,:,2]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,2]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,2]),3))
         print('Metrics results DAS: \n', 'SSIM: ',round(np.mean(SSIM[j,:,:,3]),3), ' PC: ', round(np.mean(PC[j,:,:,3]),3), ' RMSE: ', round(np.mean(RMSE[j,:,:,3]),3), ' PSNR: ', round(np.mean(PSNR[j,:,:,3]),3))
         print('\n')
@@ -282,19 +327,19 @@ def testing(SSIM,PC,RMSE,PSNR,loader,Ao,model,model_nc):
         Pdas=np.reshape(Pdas,(64,64))
         Pdas=Pdas.astype(np.float32)
         Plbp = Ao.T@sinogram.ravel()
-        Plbp = Plbp.detach().numpy() 
+        Plbp = Plbp.detach().numpy()
         Plbp=Plbp/np.max(np.abs(Plbp))
         Plbp=np.reshape(Plbp,(64,64))
         Plbp=Plbp.astype(np.float32)
         predimage = predicting(model,sinogram.view(1,sinogram.shape[0],sinogram.shape[1]), Ao, "cpu").detach().numpy()
         predimage_nc = predicting(model_nc,sinogram.view(1,sinogram.shape[0],sinogram.shape[1]), Ao, "cpu").detach().numpy()
-    
+
         plt.imshow(trueimage, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);
         plt.subplot(1,5,2);plt.title('DAS reconstruction',fontsize=12);
-        plt.imshow(Pdas, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);  
+        plt.imshow(Pdas, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);
         plt.subplot(1,5,3);plt.title('LBP reconstruction',fontsize=12);
         plt.imshow(Plbp, aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);
         plt.subplot(1,5,4);plt.title('Benchmark recosntruction',fontsize=12);
-        plt.imshow(predimage_nc[0,:,:], aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);  
+        plt.imshow(predimage_nc[0,:,:], aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);
         plt.subplot(1,5,5);plt.title('ANDMask recosntruction',fontsize=12);
-        plt.imshow(predimage[0,:,:], aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);    
+        plt.imshow(predimage[0,:,:], aspect='equal', interpolation='none', extent=(-tim/2*1e3,tim/2*1e3,-tim/2*1e3,tim/2*1e3),cmap=colormap);
