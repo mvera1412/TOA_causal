@@ -201,7 +201,7 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ck
         torch.save(checkpoint, ckp_best)
     return valid_loss_min 
 
-def computing_metrics(X,Y,Ao,model,model_nc):
+def computing_metrics(X,Y,Ao,model,model_nc, as_dict=False):
     bs = X.shape[0]
     pred = predicting(model,X, Ao.to(device="cpu"), "cpu")
     pred_nc = predicting(model_nc,X, Ao.to(device="cpu"), "cpu")
@@ -243,6 +243,14 @@ def computing_metrics(X,Y,Ao,model,model_nc):
         PC[i1,3]=stats.pearsonr(trueimage.ravel(),Pdas.ravel())[0]  
         RMSE[i1,3]=math.sqrt(mean_squared_error(trueimage,Pdas))
         PSNR[i1,3]=peak_signal_noise_ratio(trueimage,Pdas)
+    if as_dict:
+        metrics = {
+            'SSIM': SSIM,
+            'PC': PC,
+            'RMSE': RMSE,
+            'PSNR': PSNR,
+        }
+        return metrics
     return SSIM,PC,RMSE,PSNR
 
 def testing(SSIM,PC,RMSE,PSNR,loader,Ao,model,model_nc):
