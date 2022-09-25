@@ -98,6 +98,15 @@ def train(model, device, train_loaders, optimizer,
           Ao,
           agreement_threshold,
           scheduler):
+    """
+
+    :param train_loaders: list of DataLoader objects, one for each environment.
+        iter(train_loaders[i]) returns the i-th environment iterator through pairs (batch_inputs, batch_targets)
+        next(iter(train_loaders[i])) returns the pair (batch_inputs, batch_targets) of sizes:
+            batch_inputs.size() = (batch_size, height, width) and
+            batch_targets.size() = (batch_size, height, width)
+    :return:
+    """
 
     model.train()
 
