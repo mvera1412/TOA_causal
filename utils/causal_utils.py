@@ -245,6 +245,7 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ck
     return valid_loss_min
 
 def computing_metrics(X,Y,Ao,model,model_nc=None, device="cpu", as_dict=False):
+    device = "cpu"  # force device to 'cpu'
     bs = X.shape[0]
     pred = predicting(model,X, Ao.to(device=device), device=device)
     if model_nc:
