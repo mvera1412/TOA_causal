@@ -255,15 +255,22 @@ def computing_metrics(X,Y,Ao,model,model_nc=None, device="cpu", as_dict=False):
     RMSE=np.zeros((bs,4))
     PSNR=np.zeros((bs,4))
     for i1 in range(bs):
-        trueimage=Y[i1,:,:].detach().numpy()
-        predimage=pred[i1,:,:].detach().numpy()
+        try:
+            trueimage = Y[i1,:,:].detach().numpy()
+            predimage = pred[i1,:,:].detach().numpy()
+        except TypeError:
+            trueimage=Y[i1,:,:].cpu().detach().numpy()
+            predimage=pred[i1,:,:].cpu().detach().numpy()
         predimage=predimage/np.max(np.abs(predimage))
         SSIM[i1,0]=structural_similarity(trueimage,predimage)
         PC[i1,0]=stats.pearsonr(trueimage.ravel(),predimage.ravel())[0]
         RMSE[i1,0]=math.sqrt(mean_squared_error(trueimage,predimage))
         PSNR[i1,0]=peak_signal_noise_ratio(trueimage,predimage)
         if model_nc:
-            predimage=pred_nc[i1,:,:].detach().numpy()
+            try:
+                predimage = pred_nc[i1,:,:].detach().numpy()
+            except TypeError:
+                predimage = pred_nc[i1, :, :].cpu().detach().numpy()
             predimage=predimage/np.max(np.abs(predimage))
             SSIM[i1,1]=structural_similarity(trueimage,predimage)
             PC[i1,1]=stats.pearsonr(trueimage.ravel(),predimage.ravel())[0]
@@ -271,7 +278,10 @@ def computing_metrics(X,Y,Ao,model,model_nc=None, device="cpu", as_dict=False):
             PSNR[i1,1]=peak_signal_noise_ratio(trueimage,predimage)
 
         Plbp = Ao.T@X[i1,:,:].ravel()
-        Plbp = Plbp.detach().numpy()
+        try:
+            Plbp = Plbp.detach().numpy()
+        except TypeError:
+            Plbp = Plbp.cpu().detach().numpy()
         Plbp=Plbp/np.max(np.abs(Plbp))
         Plbp=np.reshape(Plbp,(64,64))
         Plbp=Plbp.astype(np.float32)
