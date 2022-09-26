@@ -30,7 +30,11 @@ class Client(DummyClient):
             >>> wandb_client.log(metrics={"loss": 100}, step=0)
         """
         wandb.login()
-        wandb.init(project=project, config=config, tags=tags, notes=notes)
+        self.run = wandb.init(project=project, config=config, tags=tags, notes=notes, reinit=True)
 
     def log(self, metrics: dict, step=None):
         wandb.log(metrics, step=step)
+
+    def finish_run(self):
+        """To start a new run with different configs, for example, use this function"""
+        self.run.finish()
