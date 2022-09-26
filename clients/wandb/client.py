@@ -5,8 +5,12 @@ import wandb
 class DummyClient:
     def __init__(self, **kwargs):
         print("Will not log any metrics for this entire run")
+        self.config = dict()
 
     def log(self, **kwargs):
+        pass
+
+    def finish_run(self, **kwargs):
         pass
 
 
