@@ -31,6 +31,7 @@ class Client(DummyClient):
         """
         wandb.login()
         self.run = wandb.init(project=project, config=config, tags=tags, notes=notes, reinit=True)
+        self.config = wandb.config
 
     def log(self, metrics: dict, step=None):
         wandb.log(metrics, step=step)
