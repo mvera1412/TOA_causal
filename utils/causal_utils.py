@@ -266,6 +266,8 @@ def computing_metrics(X,Y,Ao,model,model_nc=None, device="cpu", as_dict=False):
         PC[i1,0]=stats.pearsonr(trueimage.ravel(),predimage.ravel())[0]
         RMSE[i1,0]=math.sqrt(mean_squared_error(trueimage,predimage))
         PSNR[i1,0]=peak_signal_noise_ratio(trueimage,predimage)
+        if as_dict:
+            continue
         if model_nc:
             try:
                 predimage = pred_nc[i1,:,:].detach().numpy()
