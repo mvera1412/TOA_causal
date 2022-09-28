@@ -122,7 +122,7 @@ def compute_and_log_metrics(datas, Ao, model, device):
             "RMSE_batch_mean": f(metrics["RMSE"]),
             "PSNR_batch_mean": f(metrics["PSNR"]),
         }
-    wandb.log(metrics=metrics_to_log)
+    wandb.log(metrics_to_log)
 
 
 def train(model, device, train_loaders, optimizer,
