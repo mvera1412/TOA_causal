@@ -13,11 +13,8 @@ from skimage.metrics import mean_squared_error
 from skimage.metrics import peak_signal_noise_ratio
 import matplotlib.pyplot as plt
 import IRMv1.algorithm
-from clients.wandb.client import Client as WandbClient
-from clients.wandb.client import DummyClient
+import wandb
 
-
-dummy_client = DummyClient()
 
 def load_traindataset(cache_dir,val_percent,train_batchsize,val_batchsize,le):
     train_loaders = []
@@ -97,7 +94,7 @@ def load_ckp(checkpoint_fpath, model, optimizer):
     return model, optimizer, checkpoint['epoch'], loss, checkpoint['learning_rate'], checkpoint['batchsize'], checkpoint['agreement_threshold']
 
 
-def compute_and_log_metrics(wandb_client, datas, Ao, model, device):
+def compute_and_log_metrics(datas, Ao, model, device):
     metric_dicts = {
         "SSIM": [], "PC": [], "RMSE": [], "PSNR": []
     }
@@ -125,7 +122,7 @@ def compute_and_log_metrics(wandb_client, datas, Ao, model, device):
             "RMSE_batch_mean": f(metrics["RMSE"]),
             "PSNR_batch_mean": f(metrics["PSNR"]),
         }
-    wandb_client.log(metrics=metrics_to_log)
+    wandb.log(metrics=metrics_to_log)
 
 
 def train(model, device, train_loaders, optimizer,
@@ -134,12 +131,10 @@ def train(model, device, train_loaders, optimizer,
           Ao,
           agreement_threshold,
           scheduler,
-          epoch=None,
-          wandb_client: Union[WandbClient, DummyClient] = None):
+          epoch=None):
     """
 
     :param epoch: epoch number
-    :param wandb_client: for logging metrics
     :param train_loaders: list of DataLoader objects, one for each environment.
         iter(train_loaders[i]) returns the i-th environment iterator through pairs (batch_inputs, batch_targets)
         next(iter(train_loaders[i])) returns the pair (batch_inputs, batch_targets) of sizes:
@@ -147,8 +142,6 @@ def train(model, device, train_loaders, optimizer,
             batch_targets.size() = (batch_size, height, width)
     :return:
     """
-    if wandb_client is None:
-        wandb_client = dummy_client
 
     model.train()
 
@@ -207,7 +200,7 @@ def train(model, device, train_loaders, optimizer,
         example_count += output.shape[0]
         batch_idx += 1
         if (batch_idx % 5 == 0) or (batch_idx == batch_size - 1):
-            compute_and_log_metrics(wandb_client, datas, Ao, model, device)
+            compute_and_log_metrics(datas, Ao, model, device)
     scheduler.step()
 
 
