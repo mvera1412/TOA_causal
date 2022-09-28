@@ -131,7 +131,8 @@ def train(model, device, train_loaders, optimizer,
           Ao,
           agreement_threshold,
           scheduler,
-          epoch=None):
+          epoch=None,
+          **kwargs):
     """
 
     :param epoch: epoch number
@@ -183,7 +184,9 @@ def train(model, device, train_loaders, optimizer,
             method='and_mask',
             scale_grad_inverse_sparsity=1,
         )"""
-        irm_lambda = 10000.0
+        irm_lambda = kwargs.get('irm_lambda')
+        if irm_lambda is None:
+            raise Exception('missing param: irm_lambda')
         IRMv1.algorithm.compute_grads(
             irm_lambda,
             batch_size,
