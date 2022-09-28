@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import MultiStepLR
 from TOA.train import createForwMat
 from utils.causal_utils import train,validation,testing,computing_metrics,load_traindataset,load_testdataset,load_ckp
 from utils.noncausal_utils import load_traindataset_nc,train_nc
-from clients.wandb.client import Client as WandbClient
+import wandb
 
 val_percent = 440.0/2216.0 # 440 para validacion, 1776 para train
 le = 5 # cantidad de environments
@@ -31,8 +31,7 @@ def setup_wandb():
     project = "my-test-project"
     notes = "test using main"
     tags = ["tag1"]
-    wandb_client = WandbClient(config=config, project=project, tags=tags, notes=notes)
-    return wandb_client
+    wandb.init(config=config, project=project, tags=tags, notes=notes)
 
     
 if __name__ == '__main__':
@@ -42,7 +41,7 @@ if __name__ == '__main__':
         device = torch.device("cpu")
     print(f"Device to be used: {device}")
 
-    wandb_client = setup_wandb()
+    setup_wandb()
 
 	##Loss
     loss_fn = torch.nn.MSELoss()
@@ -74,8 +73,7 @@ if __name__ == '__main__':
                 lr_scheduler = MultiStepLR(optimizer,milestones=[le * epochs * 3 // 4],gamma=0.1)
                 for epoch in tqdm(range(epoch0 + 1, epochs + 1)):
                     train(model, device, train_loaders, optimizer, n_agreement_envs=le, Ao=Ao, loss_fn=loss_fn,
-                          agreement_threshold=agreement_threshold, scheduler=lr_scheduler, epoch=epoch,
-                          wandb_client=wandb_client)
+                          agreement_threshold=agreement_threshold, scheduler=lr_scheduler, epoch=epoch)
                     checkpoint['epoch'] = epoch
                     checkpoint['valid_loss_min'] = validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ckp_last, ckp_best, fecha)
                     
