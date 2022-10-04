@@ -1,10 +1,15 @@
 import torch
 
-def get_grads(agreement_threshold, batch_size, loss_fn,
-              n_agreement_envs, params, output,
+
+NAME = "ANDMask"
+
+def get_grads(batch_size,
+              loss_fn,
+              n_agreement_envs,
+              params,
+              output,
               target,
-              method,
-              scale_grad_inverse_sparsity,
+              **kwargs
               ):
     """
     Use the and mask or the geometric mean to put gradients together.
@@ -31,6 +36,11 @@ def get_grads(agreement_threshold, batch_size, loss_fn,
         mean_loss: mean loss across environments
         masks: a list of the binary masks (every element corresponds to one layer) applied to the gradient.
     """
+    agreement_threshold = kwargs.get('agreement_threshold')
+    method = kwargs.get('method')
+    scale_grad_inverse_sparsity = kwargs.get('scale_grad_inverse_sparsity')
+    if agreement_threshold is None or method is None or scale_grad_inverse_sparsity is None:
+        raise Exception('Missing parameters in train algorithm')
 
     param_gradients = [[] for _ in params]
     outputs = output.view(n_agreement_envs, batch_size, -1)

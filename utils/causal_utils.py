@@ -1,18 +1,16 @@
-from typing import Union
-
 import torch
 import numpy as np
 import os
 from TOA.predict import applyDAS
-import ANDMask.and_mask_utils as and_mask_utils
-from ANDMask.common import permutation_groups
+from train_algorithms.common import permutation_groups
 import math
 from scipy import stats
 from skimage.metrics import structural_similarity
 from skimage.metrics import mean_squared_error
 from skimage.metrics import peak_signal_noise_ratio
 import matplotlib.pyplot as plt
-import IRMv1.algorithm
+import train_algorithms.ANDMask.algorithm as ANDMask
+import train_algorithms.IRMv1.algorithm as IRMv1
 import wandb
 
 
@@ -129,10 +127,11 @@ def train(model, device, train_loaders, optimizer,
           n_agreement_envs,
           loss_fn,
           Ao,
-          agreement_threshold,
-          scheduler,
-          epoch=None,
-          **kwargs):
+          epoch: int,
+          algorithm: str,
+          scheduler=None,
+          **kwargs
+          ):
     """
 
     :param epoch: epoch number
@@ -143,6 +142,7 @@ def train(model, device, train_loaders, optimizer,
             batch_targets.size() = (batch_size, height, width)
     :return:
     """
+    global mean_loss
 
     model.train()
 
@@ -174,37 +174,39 @@ def train(model, device, train_loaders, optimizer,
         optimizer.zero_grad()
 
         output = predicting(model, inputs, Ao, device)
-        """mean_loss, masks = and_mask_utils.get_grads(
-            agreement_threshold,
-            batch_size,
-            loss_fn, n_agreement_envs,
-            params=optimizer.param_groups[0]['params'],
-            output=output,
-            target=target,
-            method='and_mask',
-            scale_grad_inverse_sparsity=1,
-        )"""
-        irm_lambda = kwargs.get('irm_lambda')
-        if irm_lambda is None:
-            raise Exception('missing param: irm_lambda')
-        IRMv1.algorithm.compute_grads(
-            irm_lambda,
-            batch_size,
-            loss_fn=None,
-            n_envs=n_agreement_envs,
-            model_params=list(model.parameters()),
-            output=output,
-            target=target,
-            device=device,
-        )
+        if algorithm == ANDMask.NAME:
+            mean_loss, masks = ANDMask.get_grads(
+                batch_size,
+                loss_fn,
+                n_agreement_envs,
+                params=optimizer.param_groups[0]['params'],
+                output=output,
+                target=target,
+                **kwargs,
+            )
+        elif algorithm == IRMv1.NAME:
+            IRMv1.compute_grads(
+                batch_size,
+                loss_fn=None,
+                n_envs=n_agreement_envs,
+                model_params=list(model.parameters()),
+                output=output,
+                target=target,
+                device=device,
+                epoch=epoch,
+                **kwargs
+            )
         optimizer.step()
 
-        # losses.append(mean_loss.item())
+        if algorithm == ANDMask.NAME:
+            losses.append(mean_loss.item())
+
         example_count += output.shape[0]
         batch_idx += 1
         if (batch_idx % 5 == 0) or (batch_idx == batch_size - 1):
             compute_and_log_metrics(datas, Ao, model, device)
-    scheduler.step()
+    if scheduler is not None:
+        scheduler.step()
 
 
 def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ckp_last, ckp_best,fecha):

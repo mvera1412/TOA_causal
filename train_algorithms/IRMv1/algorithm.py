@@ -4,6 +4,8 @@ from typing import Callable, Union
 
 l2_regularizer_weight = 0.001
 
+NAME = "IRMv1"
+
 
 def mean_nll(logits, y):
     return torch.nn.functional.binary_cross_entropy_with_logits(logits, y)
@@ -19,19 +21,28 @@ def penalty(logits, y, loss_fn: Callable):
     return torch.sum(grad**2)
 
 
-def compute_grads(irm_lambda: float,
-                  batch_size: int,
+def compute_grads(batch_size: int,
                   loss_fn: Union[Callable, None],
                   n_envs: int,
                   model_params: list,
                   output: Tensor,
                   target: Tensor,
-                  device: torch.device
+                  device: torch.device,
+                  epoch: int,
+                  **kwargs
                   ):
     """Sets gradient values using outputs, targets and loss_fn(outputs, targets).
         * optimizer.zero_grad() called before entering this function
         * optimizer.step() called right after this function returns
+    :param epoch: epoch number
+    :param kwargs: parameters:
+        * irm_lambda: scaling factor IRM term in loss func
+        * penalty_anneal_epochs: epoch number from which to start applying
     """
+    irm_lambda = kwargs.get('irm_lambda')
+    penalty_anneal_epochs = kwargs.get('penalty_anneal_epochs')
+    if irm_lambda is None or penalty_anneal_epochs is None:
+        raise Exception('missing parameter')
     loss_fn = loss_fn if loss_fn else mean_nll
 
     outputs = output.view(n_envs, batch_size, -1)  # will iterate over each env (first dim)
@@ -60,10 +71,12 @@ def compute_grads(irm_lambda: float,
     #penalty_weight_applied = penalty_weight if step >= flags.penalty_anneal_iters else 1.0
 
     # LOSS: IRM term
-    loss += irm_lambda * train_penalty  # irm_lambda == penalty_weight
-    if irm_lambda > 1.0:
+    if epoch > penalty_anneal_epochs:
         # Rescale the entire loss to keep gradients in a reasonable range
+        loss += irm_lambda * train_penalty  # irm_lambda == penalty_weight
         loss /= irm_lambda
+    else:
+        loss += train_penalty
 
     loss.backward()
     return

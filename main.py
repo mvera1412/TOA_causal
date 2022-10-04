@@ -41,7 +41,7 @@ if __name__ == '__main__':
         device = torch.device("cpu")
     print(f"Device to be used: {device}")
 
-    setup_wandb()
+    #setup_wandb()
 
 	##Loss
     loss_fn = torch.nn.MSELoss()
@@ -55,25 +55,33 @@ if __name__ == '__main__':
     ckp_last = cache_dir + 'mbfdunetln' + fecha + '.pth' # name of the file of the saved weights of the trained net
     ckp_best = cache_dir + 'mbfdunetln_best' + fecha + '.pth'
     checkpoint = {'valid_loss_min': np.inf}
-    
+
     # Entrenamiento red causal
     epoch0 = 0
+    algorithm = "IRMv1"
+    param_dict: dict
     for batchsize in bs:
         train_loaders, val_loader = load_traindataset(cache_dir,val_percent,batchsize,val_batchsize=40,le = le)
         for lr in alphas:
-            for agreement_threshold in taus:
+            for algorithm_param in taus:
                 model = MBPFDUNet().to(device=device)
                 checkpoint['state_dict'] = model.state_dict()
                 optimizer = torch.optim.Adam(model.parameters(),lr=lr)
                 checkpoint['learning_rate'] = lr
                 checkpoint['batchsize'] = batchsize
-                checkpoint['agreement_threshold'] = agreement_threshold
+                checkpoint['agreement_threshold'] = algorithm_param
                 checkpoint['optimizer'] = optimizer.state_dict()
                 checkpoint['epoch'] = epoch0
                 lr_scheduler = MultiStepLR(optimizer,milestones=[le * epochs * 3 // 4],gamma=0.1)
+                if algorithm == "ANDMask":
+                    param_dict = {'agreement_threshold': algorithm_param,
+                                  'method': 'and_mask',
+                                  'scale_grad_inverse_sparsity': 1}
+                elif algorithm == "IRMv1":
+                    param_dict = {'irm_lambda': algorithm_param, 'penalty_anneal_epochs': 30}
                 for epoch in tqdm(range(epoch0 + 1, epochs + 1)):
                     train(model, device, train_loaders, optimizer, n_agreement_envs=le, Ao=Ao, loss_fn=loss_fn,
-                          agreement_threshold=agreement_threshold, scheduler=lr_scheduler, epoch=epoch)
+                          scheduler=lr_scheduler, epoch=epoch, algorithm=algorithm, **param_dict)
                     checkpoint['epoch'] = epoch
                     checkpoint['valid_loss_min'] = validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ckp_last, ckp_best, fecha)
                     
