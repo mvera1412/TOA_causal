@@ -2,7 +2,6 @@ import torch
 from torch import Tensor
 from typing import Callable, Union
 
-l2_regularizer_weight = 0.001
 
 NAME = "IRMv1"
 
@@ -39,9 +38,24 @@ def compute_grads(batch_size: int,
         * irm_lambda: scaling factor IRM term in loss func
         * penalty_anneal_epochs: epoch number from which to start applying
     """
-    irm_lambda = kwargs.get('irm_lambda')
-    penalty_anneal_epochs = kwargs.get('penalty_anneal_epochs')
-    if irm_lambda is None or penalty_anneal_epochs is None:
+    # determine parameters
+    penalty_anneal_epochs = 1000000  # default value; shuld be overriden by a smaller one
+    use_epoch_lambda_map = kwargs.get('use_epoch_lambda_map')
+    if use_epoch_lambda_map:
+        epoch_lambda_map = kwargs.get('epoch_lambda_map')
+        if epoch_lambda_map is None:
+            raise Exception('missing parameter')
+        if epoch in epoch_lambda_map.keys():
+            irm_lambda = epoch_lambda_map[epoch]
+        else:
+            max_defined_epoch = max(epoch_lambda_map.keys())
+            irm_lambda = epoch_lambda_map[max_defined_epoch]
+            penalty_anneal_epochs = 1000000  # high so it never hits the bound, though it should never happen
+    else:
+        irm_lambda = kwargs.get('irm_lambda')
+        penalty_anneal_epochs = kwargs.get('penalty_anneal_epochs')
+    l2_reg = kwargs.get('l2_reg')
+    if irm_lambda is None or penalty_anneal_epochs is None or l2_reg is None:
         raise Exception('missing parameter')
     loss_fn = loss_fn if loss_fn else mean_nll
 
@@ -65,18 +79,41 @@ def compute_grads(batch_size: int,
     # LOSS: nll ERM term
     loss: torch.Tensor = train_nll.clone()
     # LOSS: L2 term
-    loss += l2_regularizer_weight * weight_norm
+    loss += l2_reg * weight_norm
 
     # this uses the current epoch number to apply a penalty. For now just hardocde it
     #penalty_weight_applied = penalty_weight if step >= flags.penalty_anneal_iters else 1.0
 
     # LOSS: IRM term
-    if epoch > penalty_anneal_epochs:
-        # Rescale the entire loss to keep gradients in a reasonable range
+    if use_epoch_lambda_map:
         loss += irm_lambda * train_penalty  # irm_lambda == penalty_weight
         loss /= irm_lambda
     else:
-        loss += train_penalty
+        if epoch > penalty_anneal_epochs:
+            # Rescale the entire loss to keep gradients in a reasonable range
+            loss += irm_lambda * train_penalty  # irm_lambda == penalty_weight
+            loss /= irm_lambda
+        else:
+            loss += train_penalty
 
     loss.backward()
     return
+
+
+def build_lambda_map() -> dict:
+    """this dict maps epoch number to irm_lambda value"""
+    lambda_map = dict()
+    intervals = [
+        ([1, 16], 1.0),
+        ([16, 26], 1000.0),
+        ([26, 36], 10000.0),
+        ([36, 46], 30000.0),
+        ([46, 66], 50000.0)
+    ]
+    for bounds_values in intervals:
+        bounds = bounds_values[0]
+        irm_lambda = bounds_values[1]
+        lower, upper = bounds[0], bounds[1]
+        for i in range(lower, upper):
+            lambda_map[i] = irm_lambda
+    return lambda_map
