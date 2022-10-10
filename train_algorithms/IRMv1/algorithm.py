@@ -100,16 +100,17 @@ def compute_grads(batch_size: int,
     return
 
 
-def build_lambda_map() -> dict:
+def build_lambda_map(intervals=None) -> dict:
     """this dict maps epoch number to irm_lambda value"""
     lambda_map = dict()
-    intervals = [
-        ([1, 16], 1.0),
-        ([16, 26], 1000.0),
-        ([26, 36], 10000.0),
-        ([36, 46], 30000.0),
-        ([46, 66], 50000.0)
-    ]
+    if intervals is None:
+        intervals = [
+            ([1, 16], 1.0),
+            ([16, 26], 1000.0),
+            ([26, 36], 10000.0),
+            ([36, 46], 30000.0),
+            ([46, 66], 50000.0)
+        ]
     for bounds_values in intervals:
         bounds = bounds_values[0]
         irm_lambda = bounds_values[1]
