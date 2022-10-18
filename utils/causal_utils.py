@@ -209,21 +209,27 @@ def train(model, device, train_loaders, optimizer,
         scheduler.step()
 
 
-def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ckp_last, ckp_best,fecha):
+def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ckp_last, ckp_best,fecha, metrics=True):
     valid_loss_min = checkpoint['valid_loss_min']
     val_loss = 0.0
     bs = val_loader.batch_size
     n_val = bs * len(val_loader)
+
+    env_losses = dict()
+    i = 0
     with torch.no_grad():
         iterator = iter(val_loader)
         while 1:
+            env_losses[i] = 0
             try:
                 datas = next(iterator)
             except StopIteration:
                 break
             predv = predicting(model, datas[0].to(device), Ao, device)
             loss = loss_fn(predv, datas[1].to(device))
+            env_losses[i] += bs * loss.item()
             val_loss += bs * loss.item()
+        i += 1
     val_loss = val_loss / n_val
 
     checkpoint = {
@@ -240,6 +246,8 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ck
     if val_loss < valid_loss_min:
         valid_loss_min = val_loss
         torch.save(checkpoint, ckp_best)
+    if metrics:
+        return valid_loss_min, val_loss, env_losses
     return valid_loss_min
 
 def computing_metrics(X,Y,Ao,model,model_nc=None, device="cpu", as_dict=False):
