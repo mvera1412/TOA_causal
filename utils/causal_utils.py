@@ -345,41 +345,26 @@ def computing_metrics(X,Y,Ao,model,model_nc=None, device="cpu", as_dict=False):
         return metrics
     return SSIM,PC,RMSE,PSNR
 
-def validation_compute_metrics(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint):
-    valid_loss_min = checkpoint['valid_loss_min']
-    val_loss = 0.0
-    bs = val_loader.batch_size
-    n_val = bs * len(val_loader)
+def validation_compute_metrics(model, device, val_loaders, loss_fn, Ao, checkpoint):
+    total_val_loss: float
+    min_valid_loss = checkpoint['valid_loss_min']
 
     env_losses = dict()
-    i = 0
     with torch.no_grad():
-        iterator = iter(val_loader)
-        while 1:
+        for i, env_loader in enumerate(iter(val_loaders)):
             env_losses[i] = 0
-            try:
-                datas = next(iterator)
-            except StopIteration:
-                break
-            predv = predicting(model, datas[0].to(device), Ao, device)
-            loss = loss_fn(predv, datas[1].to(device))
-            env_losses[i] += bs * loss.item()
-            val_loss += bs * loss.item()
-        i += 1
-    val_loss = val_loss / n_val
+            for env_batch in iter(env_loader):
+                input, target = env_batch[0], env_batch[1]
+                predv = predicting(model, input.to(device), Ao, device)
+                batch_loss = loss_fn(predv, target.to(device))
+                env_losses[i] += batch_loss.item()
+            n_batches = len(env_loader)
+            env_losses[i] = env_losses[i] / n_batches  # environment mean loss
+    total_val_loss = sum([loss for loss in env_losses.values()]) / len(env_losses)  # mean loss of all envs
 
-    checkpoint = {
-            'epoch': checkpoint['epoch'],
-            'valid_loss_min': np.min((valid_loss_min,val_loss)),
-            'state_dict': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'learning_rate': checkpoint['learning_rate'],
-            'batchsize': checkpoint['batchsize'],
-            'agreement_threshold': checkpoint['agreement_threshold']
-                }
-    if val_loss < valid_loss_min:
-        valid_loss_min = val_loss
-    return valid_loss_min, val_loss, env_losses
+    if total_val_loss < min_valid_loss:
+        min_valid_loss = total_val_loss
+    return min_valid_loss, total_val_loss, env_losses
 
 def testing(SSIM,PC,RMSE,PSNR,loader,Ao,model,model_nc):
     dim = SSIM.shape

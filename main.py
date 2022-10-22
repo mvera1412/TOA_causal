@@ -5,7 +5,7 @@ import numpy as np
 from TOA.mbfdunetln import MBPFDUNet
 from torch.optim.lr_scheduler import MultiStepLR
 from TOA.train import createForwMat
-from utils.causal_utils import train, validation, testing, computing_metrics, load_traindataset_v2, load_testdataset, \
+from utils.causal_utils import train, validation, testing, computing_metrics, validation_compute_metrics, load_traindataset_v2, load_testdataset, \
     load_ckp
 from utils.noncausal_utils import load_traindataset_nc, train_nc
 from train_algorithms.IRMv1.algorithm import build_lambda_map
@@ -49,11 +49,11 @@ if __name__ == '__main__':
     loss_fn = torch.nn.MSELoss()
 
     ##TOA matrix
-    """torch.load('Ao.pt')
+    torch.load('Ao.pt')
     Ao = createForwMat()
     Ao = torch.as_tensor(Ao).type(torch.float32)
     torch.save(Ao, 'Ao.pt')
-    Ao = Ao.to(device=device)"""
+    Ao = Ao.to(device=device)
 
     ##Files
     ckp_last = cache_dir + 'mbfdunetln' + fecha + '.pth'  # name of the file of the saved weights of the trained net
@@ -93,10 +93,7 @@ if __name__ == '__main__':
                 for epoch in tqdm(range(epoch0 + 1, epochs + 1)):
                     train(model, device, train_loaders, optimizer, n_agreement_envs=le, Ao=Ao, loss_fn=loss_fn,
                           scheduler=lr_scheduler, epoch=epoch, algorithm=algorithm, **param_dict)
-                    valid_loss_min, valid_loss, env_losses_dict = validation(
-                        model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ckp_last, ckp_best, fecha,
-                        metrics=True
-                    )
+                    valid_loss_min, valid_loss, env_losses_dict = validation_compute_metrics(model, device, val_loader, loss_fn, Ao, checkpoint)
                     val_metrics = {'validation_loss': valid_loss}
                     for env, loss in env_losses_dict.items():
                         val_metrics[f"env_{env}"] = loss
