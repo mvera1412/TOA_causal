@@ -5,7 +5,7 @@ import numpy as np
 from TOA.mbfdunetln import MBPFDUNet
 from torch.optim.lr_scheduler import MultiStepLR
 from TOA.train import createForwMat
-from utils.causal_utils import train, validation, testing, computing_metrics, load_traindataset, load_testdataset, \
+from utils.causal_utils import train, validation, testing, computing_metrics, load_traindataset_v2, load_testdataset, \
     load_ckp
 from utils.noncausal_utils import load_traindataset_nc, train_nc
 from train_algorithms.IRMv1.algorithm import build_lambda_map
@@ -49,9 +49,11 @@ if __name__ == '__main__':
     loss_fn = torch.nn.MSELoss()
 
     ##TOA matrix
+    """torch.load('Ao.pt')
     Ao = createForwMat()
     Ao = torch.as_tensor(Ao).type(torch.float32)
-    Ao = Ao.to(device=device)
+    torch.save(Ao, 'Ao.pt')
+    Ao = Ao.to(device=device)"""
 
     ##Files
     ckp_last = cache_dir + 'mbfdunetln' + fecha + '.pth'  # name of the file of the saved weights of the trained net
@@ -64,7 +66,7 @@ if __name__ == '__main__':
     algorithm = "IRMv1"
     param_dict: dict
     for batchsize in bs:
-        train_loaders, val_loader = load_traindataset(cache_dir, val_percent, batchsize, val_batchsize=40, le=le)
+        train_loaders, val_loader = load_traindataset_v2(cache_dir, val_percent, batchsize, val_batchsize=40, le=le)
         for lr in alphas:
             for algorithm_param in taus:
                 model = MBPFDUNet().to(device=device)

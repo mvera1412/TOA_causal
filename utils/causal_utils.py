@@ -1,3 +1,5 @@
+from typing import Tuple, List
+
 import torch
 import numpy as np
 import os
@@ -33,6 +35,32 @@ def load_traindataset(cache_dir,val_percent,train_batchsize,val_batchsize,le):
     val_set = torch.utils.data.ConcatDataset(val_set)
     val_loader = torch.utils.data.DataLoader(val_set,batch_size=val_batchsize, shuffle=True, drop_last=True)
     return train_loaders, val_loader
+
+def load_traindataset_v2(cache_dir,val_percent,train_batchsize,val_batchsize,le) -> Tuple[List[torch.utils.data.DataLoader]]:
+    """Return a tuple with 2 list, one for train and the other for validation. Each list contains a set of lists of the
+    kind "[input, target]"
+    :param cache_dir: where to read the datasets from
+    :param val_percent: percentage of the dataset meant for validation
+    :param le: number of environments present in cache_dir file
+    :return:
+    """
+    train_loaders = []
+    val_loaders = []
+    for i in range(le):
+        X = np.load(os.path.join(cache_dir, 'X'+str(i)+'.npy')) #Lotes de 2216
+        Y = np.load(os.path.join(cache_dir, 'Y'+str(i)+'.npy'))
+        train_set = torch.utils.data.TensorDataset(torch.tensor(X).float(), torch.tensor(Y).float())
+        del X,Y
+        n_val = int(len(train_set) * val_percent)
+        n_train = len(train_set) - n_val
+        train_set, val_set = torch.utils.data.random_split(train_set, [n_train, n_val])
+        data_loader_train = torch.utils.data.DataLoader(train_set, batch_size=train_batchsize, shuffle=True, drop_last=True) #1776 datos
+        data_loader_test = torch.utils.data.DataLoader(val_set, batch_size=val_batchsize, shuffle=True, drop_last=True)
+        del train_set
+        del val_set
+        train_loaders.append(data_loader_train)
+        val_loaders.append(data_loader_test)  # Son 2200, voy a hacer 55 grupos de 40
+    return train_loaders, val_loaders
 
 def load_testdataset(cache_dir):
     # Son 616, voy a hacer 14 grupos de 44
@@ -316,6 +344,42 @@ def computing_metrics(X,Y,Ao,model,model_nc=None, device="cpu", as_dict=False):
         }
         return metrics
     return SSIM,PC,RMSE,PSNR
+
+def validation_compute_metrics(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint):
+    valid_loss_min = checkpoint['valid_loss_min']
+    val_loss = 0.0
+    bs = val_loader.batch_size
+    n_val = bs * len(val_loader)
+
+    env_losses = dict()
+    i = 0
+    with torch.no_grad():
+        iterator = iter(val_loader)
+        while 1:
+            env_losses[i] = 0
+            try:
+                datas = next(iterator)
+            except StopIteration:
+                break
+            predv = predicting(model, datas[0].to(device), Ao, device)
+            loss = loss_fn(predv, datas[1].to(device))
+            env_losses[i] += bs * loss.item()
+            val_loss += bs * loss.item()
+        i += 1
+    val_loss = val_loss / n_val
+
+    checkpoint = {
+            'epoch': checkpoint['epoch'],
+            'valid_loss_min': np.min((valid_loss_min,val_loss)),
+            'state_dict': model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'learning_rate': checkpoint['learning_rate'],
+            'batchsize': checkpoint['batchsize'],
+            'agreement_threshold': checkpoint['agreement_threshold']
+                }
+    if val_loss < valid_loss_min:
+        valid_loss_min = val_loss
+    return valid_loss_min, val_loss, env_losses
 
 def testing(SSIM,PC,RMSE,PSNR,loader,Ao,model,model_nc):
     dim = SSIM.shape
