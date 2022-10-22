@@ -278,6 +278,7 @@ def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ck
         return valid_loss_min, val_loss, env_losses
     return valid_loss_min
 
+
 def computing_metrics(X,Y,Ao,model,model_nc=None, device="cpu", as_dict=False):
     device = "cpu"  # force device to 'cpu'
     bs = X.shape[0]
@@ -345,26 +346,29 @@ def computing_metrics(X,Y,Ao,model,model_nc=None, device="cpu", as_dict=False):
         return metrics
     return SSIM,PC,RMSE,PSNR
 
-def validation_compute_metrics(model, device, val_loaders, loss_fn, Ao, checkpoint):
-    total_val_loss: float
-    min_valid_loss = checkpoint['valid_loss_min']
 
-    env_losses = dict()
+def loader_compute_metrics(model, device, val_loaders, loss_fn, Ao):
+    overall_loss: float
+
     with torch.no_grad():
-        for i, env_loader in enumerate(iter(val_loaders)):
-            env_losses[i] = 0
-            for env_batch in iter(env_loader):
-                input, target = env_batch[0], env_batch[1]
-                predv = predicting(model, input.to(device), Ao, device)
-                batch_loss = loss_fn(predv, target.to(device))
-                env_losses[i] += batch_loss.item()
-            n_batches = len(env_loader)
-            env_losses[i] = env_losses[i] / n_batches  # environment mean loss
-    total_val_loss = sum([loss for loss in env_losses.values()]) / len(env_losses)  # mean loss of all envs
+        env_losses = apply_loss_to_loaders(model, device, val_loaders, loss_fn, Ao)
+    overall_loss = sum([loss for loss in env_losses.values()]) / len(env_losses)  # mean loss of all envs
+    return overall_loss, env_losses
 
-    if total_val_loss < min_valid_loss:
-        min_valid_loss = total_val_loss
-    return min_valid_loss, total_val_loss, env_losses
+
+def apply_loss_to_loaders(model, device, loaders, loss_fn, Ao) -> dict:
+    env_losses = dict()
+    for i, env_loader in enumerate(iter(loaders)):
+        env_losses[i] = 0
+        for env_batch in iter(env_loader):
+            input, target = env_batch[0], env_batch[1]
+            predv = predicting(model, input.to(device), Ao, device)
+            batch_loss = loss_fn(predv, target.to(device))
+            env_losses[i] += batch_loss.item()
+        n_batches = len(env_loader)
+        env_losses[i] = env_losses[i] / n_batches  # environment mean loss
+    return env_losses
+
 
 def testing(SSIM,PC,RMSE,PSNR,loader,Ao,model,model_nc):
     dim = SSIM.shape

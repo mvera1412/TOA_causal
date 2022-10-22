@@ -5,7 +5,7 @@ import numpy as np
 from TOA.mbfdunetln import MBPFDUNet
 from torch.optim.lr_scheduler import MultiStepLR
 from TOA.train import createForwMat
-from utils.causal_utils import train, validation, testing, computing_metrics, validation_compute_metrics, load_traindataset_v2, load_testdataset, \
+from utils.causal_utils import train, validation, testing, computing_metrics, loader_compute_metrics, load_traindataset_v2, load_testdataset, \
     load_ckp
 from utils.noncausal_utils import load_traindataset_nc, train_nc
 from train_algorithms.IRMv1.algorithm import build_lambda_map
@@ -93,13 +93,12 @@ if __name__ == '__main__':
                 for epoch in tqdm(range(epoch0 + 1, epochs + 1)):
                     train(model, device, train_loaders, optimizer, n_agreement_envs=le, Ao=Ao, loss_fn=loss_fn,
                           scheduler=lr_scheduler, epoch=epoch, algorithm=algorithm, **param_dict)
-                    valid_loss_min, valid_loss, env_losses_dict = validation_compute_metrics(model, device, val_loader, loss_fn, Ao, checkpoint)
+                    valid_loss, env_losses_dict = loader_compute_metrics(model, device, val_loader, loss_fn, Ao, checkpoint)
                     val_metrics = {'validation_loss': valid_loss}
                     for env, loss in env_losses_dict.items():
                         val_metrics[f"env_{env}"] = loss
                     wandb.log(val_metrics)
                     checkpoint['epoch'] = epoch
-                    checkpoint['valid_loss_min'] = valid_loss_min
 
     model, optimizer, best_epoch, valid_loss_min, best_lr, best_bs, best_threshold = load_ckp(ckp_best, model,
                                                                                               optimizer)
