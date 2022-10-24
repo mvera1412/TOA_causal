@@ -181,6 +181,8 @@ def train(model, device, train_loaders, optimizer,
     train_iterators = [iter(loader) for loader in train_loaders]
     it_groups = permutation_groups(train_iterators, n_agreement_envs)
 
+    loss_lists = [[], [], []]
+    loss_terms: tuple
     while 1:
         train_iterator_selection = next(it_groups)
         try:
@@ -213,7 +215,7 @@ def train(model, device, train_loaders, optimizer,
                 **kwargs,
             )
         elif algorithm == IRMv1.NAME:
-            IRMv1.compute_grads(
+            loss_terms = IRMv1.compute_grads(
                 batch_size,
                 loss_fn=None,
                 n_envs=n_agreement_envs,
@@ -231,10 +233,23 @@ def train(model, device, train_loaders, optimizer,
 
         example_count += output.shape[0]
         batch_idx += 1
+        for i, term in enumerate(loss_terms):
+            loss_lists[i].append(term)
         if (batch_idx % 5 == 0) or (batch_idx == batch_size - 1):
             compute_and_log_metrics(datas, Ao, model, device)
+            aggregate_and_log_loss_terms(loss_lists)
+            loss_lists = [[], [], []]
     if scheduler is not None:
         scheduler.step()
+
+
+def aggregate_and_log_loss_terms(loss_lists):
+    aggregated = [np.mean(values) for values in loss_lists]
+    wandb.log({
+        "ERM_term": aggregated[0],
+        "L2_reg_term": aggregated[1],
+        "IRM_term": aggregated[2],
+    })
 
 
 def validation(model, device, val_loader, optimizer, loss_fn, Ao, checkpoint, ckp_last, ckp_best,fecha, metrics=True):
