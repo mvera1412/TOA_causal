@@ -29,7 +29,7 @@ def compute_grads(batch_size: int,
                   device: torch.device,
                   epoch: int,
                   **kwargs
-                  ):
+                  ) -> tuple:
     """Sets gradient values using outputs, targets and loss_fn(outputs, targets).
         * optimizer.zero_grad() called before entering this function
         * optimizer.step() called right after this function returns
@@ -38,6 +38,9 @@ def compute_grads(batch_size: int,
         * irm_lambda: scaling factor IRM term in loss func
         * penalty_anneal_epochs: epoch number from which to start applying
     """
+    ERM_term: float
+    L2_reg_term: float
+    IRM_term: float
     # determine parameters
     penalty_anneal_epochs = 1000000  # default value; shuld be overriden by a smaller one
     use_epoch_lambda_map = kwargs.get('use_epoch_lambda_map')
@@ -71,6 +74,7 @@ def compute_grads(batch_size: int,
 
     train_nll = torch.stack([env_loss['nll'] for env_loss in env_losses]).mean()
     train_penalty = torch.stack([env_loss['penalty'] for env_loss in env_losses]).mean()
+    IRM_term = train_penalty.item()
 
     weight_norm = torch.tensor(0.).to(device=device)
     for w in model_params:
@@ -78,8 +82,11 @@ def compute_grads(batch_size: int,
 
     # LOSS: nll ERM term
     loss: torch.Tensor = train_nll.clone()
+    ERM_term = loss.item()
     # LOSS: L2 term
-    loss += l2_reg * weight_norm
+    l2_term = l2_reg * weight_norm
+    loss += l2_term
+    L2_reg_term = l2_term.item()
 
     # this uses the current epoch number to apply a penalty. For now just hardocde it
     #penalty_weight_applied = penalty_weight if step >= flags.penalty_anneal_iters else 1.0
@@ -91,13 +98,13 @@ def compute_grads(batch_size: int,
     else:
         if epoch > penalty_anneal_epochs:
             # Rescale the entire loss to keep gradients in a reasonable range
-            loss += irm_lambda * train_penalty  # irm_lambda == penalty_weight
             loss /= irm_lambda
+            loss += train_penalty  # irm_lambda == penalty_weight
         else:
             loss += train_penalty
 
     loss.backward()
-    return
+    return ERM_term, L2_reg_term, IRM_term
 
 
 def build_lambda_map(intervals=None) -> dict:
